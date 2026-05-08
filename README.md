@@ -28,15 +28,16 @@ Claude Code picks up the skill on the next session.
 The skill drives the [`sun`](https://pypi.org/project/sun-cli/) CLI. Install it once:
 
 ```bash
-# Recommended
-uv tool install sun-cli
+# Simplest — picks uv / pipx / pip automatically
+curl -fsSL https://sunapp-ai.github.io/sun-claw/install.sh | bash
 
-# Or
-pip install sun-cli
+# Or, manually
+uv tool install sun-cli   # recommended
 pipx install sun-cli
+pip install sun-cli
 ```
 
-The PyPI package is `sun-cli`; the installed binary is `sun`.
+The PyPI package is `sun-cli`; the installed binary is `sun`. The curl installer requires `uv`, `pipx`, or `pip` already on `PATH`; if none is, it prints instructions and exits.
 
 If the CLI isn't installable in your environment, the skill falls back to the HTTP API — see [`references/http-api.md`](references/http-api.md).
 

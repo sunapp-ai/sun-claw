@@ -22,17 +22,20 @@ Load only the file you need — don't inline them.
 
 ## Install
 
-The `sun` CLI is independently installable — no monorepo checkout required. Three options, in order of recommendation for external users:
+The `sun` CLI is independently installable — no monorepo checkout required. Four options, in order of recommendation for external users:
 
 ```bash
-# 1. uv tool (recommended)
-uv tool install sun-cli
+# 1. curl installer (simplest — picks uv/pipx/pip automatically)
+curl -fsSL https://sunapp-ai.github.io/sun-claw/install.sh | bash
 
-# 2. pip
-pip install sun-cli
+# 2. uv tool (manual, fastest)
+uv tool install sun-cli
 
 # 3. pipx (isolated)
 pipx install sun-cli
+
+# 4. pip
+pip install sun-cli
 ```
 
 Verify:
@@ -41,7 +44,7 @@ Verify:
 sun --help
 ```
 
-> PyPI package name is `sun-cli`; the installed binary is `sun`. (A shell installer at `https://sunapp.ai/install.sh` is planned but not yet available — use one of the Python-based methods above for now.)
+> PyPI package name is `sun-cli`; the installed binary is `sun`. The curl installer is hosted on GitHub Pages from the [`sunapp-ai/sun-claw`](https://github.com/sunapp-ai/sun-claw) repo and requires `uv`, `pipx`, or `pip` to already be available; if none is, it prints install instructions and exits.
 
 If `sun --help` fails after install, ask the user how they installed it before troubleshooting. See [references/cli-usage.md](references/cli-usage.md) for monorepo-dev install (`uv sync` + `uv run sun`) and platform-specific notes.
 
