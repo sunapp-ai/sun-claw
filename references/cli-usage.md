@@ -8,9 +8,17 @@ The CLI is the recommended path. For HTTP-only flows see [http-api.md](http-api.
 
 The `sun` CLI is self-contained — it ships and works independently of the monorepo. PyPI package name is `sun-cli`; the installed binary is `sun`. Once installed, `sun` is available on `PATH` from any directory.
 
-### uv tool install (recommended)
+### Curl installer (recommended)
 
-If the user has [uv](https://docs.astral.sh/uv/):
+```bash
+curl -fsSL https://sunapp-ai.github.io/sun-claw/install.sh | bash
+```
+
+The installer picks the first available Python package manager — `uv` (preferred), then `pipx`, then `pip --user` — and installs `sun-cli` from PyPI. If none of those is on `PATH`, the script prints install instructions and exits 1; install one and re-run.
+
+### uv tool install
+
+If the user already has [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv tool install sun-cli
@@ -29,10 +37,6 @@ pipx install sun-cli
 ```
 
 Python 3.10+ required. Only two runtime deps: `httpx` and `typer`.
-
-### Shell installer (planned, not yet live)
-
-A one-line shell installer at `https://sunapp.ai/install.sh` is planned but not yet available. Use one of the Python-based methods above.
 
 ### Verify
 

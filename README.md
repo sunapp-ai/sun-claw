@@ -1,17 +1,53 @@
 # sun-claw
 
-A [Claude Code](https://claude.com/claude-code) skill for generating [Sun](https://sunapp.ai) audio courses programmatically.
+A [Claude Code](https://claude.com/claude-code) skill — and a public reference for the [`sun`](https://pypi.org/project/sun-cli/) CLI — for generating [Sun](https://sunapp.ai) audio courses programmatically. Built for agents and automation: hand it a topic and a duration, and it produces a finished audio course you can download or publish.
 
-Given a prompt and a target duration, the skill drives the `sun` CLI (or the public HTTP API) to:
+## Quick Start
 
-1. Authenticate and mint a personal API token.
-2. Create a course generation job.
-3. Poll until the job finishes.
-4. Download the manifest and per-lecture MP3 files.
+Prompt your agent to install the CLI:
+
+```text
+> Install the Sun CLI by running https://sunapp-ai.github.io/sun-claw/install.sh
+```
+
+Then drop the `sunclaw` skill into your Claude Code skills directory (see [Install the skill](#install-the-skill)).
+
+Once installed, just ask:
+
+> Make me a 20-minute course on the history of the printing press.
+
+The skill drives the CLI end-to-end — login, course creation, polling, download — and saves the manifest plus per-lecture MP3s into a local directory.
 
 ## Install
 
-Drop the skill into your Claude Code skills directory — either project-scoped or user-scoped:
+### Curl-bash
+
+```bash
+curl -fsSL https://sunapp-ai.github.io/sun-claw/install.sh | bash
+```
+
+The installer picks the first available Python package manager — `uv` (preferred), then `pipx`, then `pip --user` — and installs `sun-cli` from PyPI. If none is on `PATH`, the script prints install instructions and exits 1.
+
+### uv tool (manual)
+
+```bash
+uv tool install sun-cli
+```
+
+Places `sun` at `~/.local/bin/sun`. Update with `uv tool upgrade sun-cli`.
+
+### pipx / pip
+
+```bash
+pipx install sun-cli      # isolated venv
+pip  install sun-cli      # standard install
+```
+
+Python 3.10+ required. Two runtime deps: `httpx` and `typer`.
+
+### Install the skill
+
+The `sunclaw` skill teaches Claude Code how to drive the CLI. Drop it into your Claude Code skills directory:
 
 ```bash
 # Project-scoped (only available inside this repo)
@@ -23,46 +59,166 @@ git clone https://github.com/sunapp-ai/sun-claw ~/.claude/skills/sunclaw
 
 Claude Code picks up the skill on the next session.
 
-## Prerequisite — the `sun` CLI
-
-The skill drives the [`sun`](https://pypi.org/project/sun-cli/) CLI. Install it once:
+## Authentication
 
 ```bash
-# Simplest — picks uv / pipx / pip automatically
-curl -fsSL https://sunapp-ai.github.io/sun-claw/install.sh | bash
+# Interactive — prompts for email + password
+sun login
 
-# Or, manually
-uv tool install sun-cli   # recommended
-pipx install sun-cli
-pip install sun-cli
+# Non-interactive
+sun login --email EMAIL --password PASSWORD
+
+# Check who's logged in (and which token is active)
+sun whoami
+
+# Forget the cached session and saved tokens
+sun logout
 ```
 
-The PyPI package is `sun-cli`; the installed binary is `sun`. The curl installer requires `uv`, `pipx`, or `pip` already on `PATH`; if none is, it prints instructions and exits.
+Credentials are stored at `~/.config/sun/credentials.json` (mode `0600` on Unix).
 
-If the CLI isn't installable in your environment, the skill falls back to the HTTP API — see [`references/http-api.md`](references/http-api.md).
+### Personal API tokens
 
-## Usage
+The `sun` CLI signs course requests with a personal API token, minted from your Supabase session.
 
-Once installed, ask Claude something like:
+```bash
+# Create a new token (NAME must match ^[a-z0-9-]+$, 1-64 chars)
+sun tokens create laptop
 
-> Make me a 20-minute course on the history of the printing press.
+# List tokens (revoked tokens stay visible for audit; full secret never re-shown)
+sun tokens list
 
-Claude will invoke the `sunclaw` skill, run `sun login` if needed, create the course, poll until it's ready, and save the manifest plus MP3s to a local directory.
+# Revoke a token by name or id
+sun tokens revoke laptop
+```
 
-## Optional — publish to Spotify
+The full secret is printed **once** at creation, then stored as the active token. Token shape: `sk_live_<22-char-base32>_<32-char-base32>`.
 
-If you also have the [`save-to-spotify`](https://github.com/spotify/save-to-spotify) Claude Code skill or CLI installed, sun-claw will offer to publish the generated course to Spotify as a podcast after generation finishes. Sun-claw handles all the audio generation; the save-to-spotify integration is used **only for Spotify auth and upload** — sun-claw does not invoke save-to-spotify's content-production pipeline.
+## Commands
 
-If you want a richer Spotify production (custom cover, image companions, in-player timeline), skip this prompt and use the `save-to-spotify` skill directly.
+### courses create
+
+Submit a course generation job.
+
+```bash
+sun courses create \
+  --prompt "A 30-minute course on the French Revolution" \
+  --duration-minutes 30
+# Prints the job_id to stdout.
+
+# Read the prompt from a file or stdin
+sun courses create --input ./prompt.txt
+cat ./prompt.txt | sun courses create
+
+# Block until done (polls with exponential back-off, 30 min total timeout)
+sun courses create --prompt "..." --wait
+
+# Pick a specific voice
+sun courses create --prompt "..." --voice-id <uuid>
+```
+
+| Flag | Description |
+|---|---|
+| `--prompt TEXT` | Course prompt. 1-4000 chars. Mutually exclusive with `--input`/stdin. |
+| `--input PATH` | Read prompt from a file. |
+| `--duration-minutes N` | 5-120. Default 30. |
+| `--voice-id UUID` | Optional voice override. |
+| `--wait` | Block until SUCCESS / ERROR. |
+| `--json` | Emit machine-readable JSON. |
+
+### courses status
+
+Check whether a job has finished.
+
+```bash
+sun courses status <JOB_ID>
+sun courses status <JOB_ID> --json
+```
+
+Statuses: `PENDING`, `PROCESSING`, `SUCCESS`, `ERROR`. Always returns `200` — read the body, not the status code. Typical 30-minute course completes in **60-300s**.
+
+### courses get
+
+Download the manifest and lecture MP3s.
+
+```bash
+# Print the JSON manifest to stdout
+sun courses get <JOB_ID>
+
+# Download into a directory
+sun courses get <JOB_ID> --out ./my-course
+```
+
+`--out DIR` writes:
+
+```
+DIR/course.json
+DIR/lectures/001-<slug>.mp3
+DIR/lectures/002-<slug>.mp3
+...
+```
+
+Signed audio URLs are re-signed on every read of the result endpoint, so re-running `courses get` will fetch fresh URLs and fill in any lectures that were skipped due to upload lag. **Don't cache `audio_url` values yourself.**
+
+## JSON mode
+
+Every command supports `--json` for scripting:
+
+```bash
+JOB_ID=$(sun courses create --prompt "..." --json | jq -r .job_id)
+sun --json courses status "$JOB_ID" | jq -r .status
+```
+
+In JSON mode:
+- All structured output goes to stdout.
+- Errors emit the bare envelope `{"error": {"code": "...", "message": "..."}}` and exit non-zero.
+- Status updates and progress hints go to stderr.
+
+## Save to Spotify (optional)
+
+If you also have the [`save-to-spotify`](https://github.com/spotify/save-to-spotify) Claude Code skill or CLI installed, sun-claw will offer to publish the generated course to Spotify as a podcast after generation finishes.
+
+The integration is **strictly auth + upload**:
+
+- `save-to-spotify auth status` / `auth login`
+- `save-to-spotify shows` / `shows create`
+- `save-to-spotify upload` (one episode per lecture, in order)
+- `save-to-spotify episodes status` (poll until `READY`)
+
+sun-claw does **not** invoke save-to-spotify's content-production pipeline — no TTS, no script writing, no cover-image generation, no timeline production. The audio is already produced by `sun`; Spotify just hosts it.
+
+If you want a richer Spotify production (custom cover, image companions, in-player timeline), skip the prompt and use the `save-to-spotify` skill directly.
+
+## Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `SUN_TOKEN` | Use this API token instead of the credentials file (CI mode). Takes precedence over `~/.config/sun/credentials.json`. |
+
+## Error codes
+
+| HTTP | `error.code` | Meaning | Action |
+|---|---|---|---|
+| 401 | `unauthorized` | Missing / unknown / revoked token | `tokens list`, mint a new one, or `login` again |
+| 403 | `forbidden` | Anonymous Supabase user trying to mint a token | `login` with email + password |
+| 404 | `not_found` | Resource doesn't exist or is owned by another user | Verify the job/token id |
+| 409 | `conflict` / `not_ready` | Duplicate token name, or `courses get` before `SUCCESS` | Pick a new name; or wait and retry |
+| 422 | `validation_error` | Body failed schema validation | Read `error.details` and fix the request |
+| 429 | `rate_limit_exceeded` | Per-user 24h cap reached | Read `Retry-After`; ask user before waiting |
+| 500 | `internal_error` | Server-side failure | Safe to retry with back-off |
+
+Both `409` codes share the HTTP status — always read `error.code`, not just the status.
 
 ## Layout
 
-- [`SKILL.md`](SKILL.md) — skill entry point. Loaded by Claude Code when the skill is triggered.
-- [`references/cli-usage.md`](references/cli-usage.md) — `sun` CLI reference (commands, flags, exit codes, troubleshooting).
+- [`SKILL.md`](SKILL.md) — skill entry point loaded by Claude Code.
+- [`references/cli-usage.md`](references/cli-usage.md) — full `sun` CLI reference (commands, flags, exit codes, troubleshooting).
 - [`references/http-api.md`](references/http-api.md) — HTTP-only flow when the CLI isn't available.
+- [`install.sh`](install.sh) — the curl installer, hosted via GitHub Pages.
 
 ## Links
 
 - Sun — https://sunapp.ai
-- `sun` CLI on PyPI — https://pypi.org/project/sun-cli/
+- `sun-cli` on PyPI — https://pypi.org/project/sun-cli/
 - Claude Code — https://claude.com/claude-code
+- Save to Spotify — https://github.com/spotify/save-to-spotify
