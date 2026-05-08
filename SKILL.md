@@ -182,7 +182,77 @@ sun courses get "$JOB_ID" --out ./printing-press
 ls ./printing-press/lectures/
 ```
 
+---
 
+## Optional — Save to Spotify
+
+After step 4, if **either**:
+
+- the [`save-to-spotify`](https://github.com/spotify/save-to-spotify) skill is loaded in this Claude Code session, **or**
+- the `save-to-spotify` CLI runs successfully (`save-to-spotify --help`),
+
+ask the user **once**:
+
+> Would you like to save this course to Spotify as a podcast?
+
+If they decline, stop. If they accept, hand off to **only the auth + upload surface** of `save-to-spotify`. Sunclaw has already produced the audio — do **not** invoke save-to-spotify's content-production pipeline.
+
+### Strict scope
+
+Use only:
+- `save-to-spotify auth status` / `auth login`
+- `save-to-spotify shows` / `shows create`
+- `save-to-spotify upload` (or `episodes create`)
+- `save-to-spotify episodes status` (for readiness polling)
+
+Do **not** invoke save-to-spotify's interview, scripting, TTS, cover-image generation, or timeline production. The MP3s already exist in `<output-dir>/lectures/`; the only job is to authenticate and upload them. If the user wants a rich timeline, image companions, or custom cover generation, defer to the full `save-to-spotify` skill — that's outside sunclaw's scope.
+
+### Inputs to collect
+
+1. **Cover image** — Spotify requires one for new shows. Ask the user for a path. If they don't have one, stop and ask them to supply one before retrying.
+2. **Show choice** — list existing shows first; ask whether to publish under an existing show or create a new one. Default name: the `title` field from `course.json`.
+
+### Handoff steps
+
+```bash
+# 0. Auth (interactive login on first use)
+save-to-spotify --json auth status \
+  || save-to-spotify auth login
+
+# 1. Resolve or create the show
+save-to-spotify --json shows                              # list existing first
+SHOW_URI=$(save-to-spotify --json shows create \
+  --title  "$(jq -r .title    <output-dir>/course.json)" \
+  --summary "$(jq -r .summary <output-dir>/course.json)" \
+  --image  "$COVER" \
+  | jq -r .show_uri)
+
+# 2. Upload each lecture as an episode, preserving lecture order
+jq -c '.lectures[]' <output-dir>/course.json | while read -r L; do
+  IDX=$(echo "$L" | jq -r .index)
+  TITLE=$(echo "$L" | jq -r .title)
+  SUMMARY=$(echo "$L" | jq -r '.summary // .description // ""')
+  FILE=$(ls <output-dir>/lectures/$(printf "%03d" "$IDX")-*.mp3)
+
+  EP_URI=$(save-to-spotify --json upload "$FILE" \
+    --title   "$TITLE" \
+    --summary "$SUMMARY" \
+    --show-id "$SHOW_URI" \
+    --image   "$COVER" \
+    | jq -r .episode_uri)
+
+  # 3. Poll readiness
+  until [ "$(save-to-spotify --json episodes status "$EP_URI" | jq -r .readiness)" = "READY" ]; do
+    sleep 10
+  done
+done
+```
+
+Adjust the field names (`title`, `summary`, `index`) to match the actual `course.json` schema produced by the `sun` CLI — read the manifest before scripting the loop.
+
+### Error handling
+
+Surface `save-to-spotify` errors verbatim — its JSON envelope already carries `error.code` and `error.message`. Do not auto-retry on `429` or `auth_required`.
 
 ---
 

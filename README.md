@@ -48,6 +48,12 @@ Once installed, ask Claude something like:
 
 Claude will invoke the `sunclaw` skill, run `sun login` if needed, create the course, poll until it's ready, and save the manifest plus MP3s to a local directory.
 
+## Optional — publish to Spotify
+
+If you also have the [`save-to-spotify`](https://github.com/spotify/save-to-spotify) Claude Code skill or CLI installed, sun-claw will offer to publish the generated course to Spotify as a podcast after generation finishes. Sun-claw handles all the audio generation; the save-to-spotify integration is used **only for Spotify auth and upload** — sun-claw does not invoke save-to-spotify's content-production pipeline.
+
+If you want a richer Spotify production (custom cover, image companions, in-player timeline), skip this prompt and use the `save-to-spotify` skill directly.
+
 ## Layout
 
 - [`SKILL.md`](SKILL.md) — skill entry point. Loaded by Claude Code when the skill is triggered.
