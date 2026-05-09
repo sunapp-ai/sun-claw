@@ -163,7 +163,7 @@ A complete generation for a user request "Make me a 20-minute course on the hist
 
 ```bash
 sun --help >/dev/null || { echo "CLI not installed"; exit 1; }
-sun whoami || sun login
+sun whoami >/dev/null || { echo "Not logged in. Run 'sun login' in your terminal first."; exit 1; }
 
 JOB_ID=$(sun courses create \
   --prompt "The history of the printing press" \
