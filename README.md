@@ -61,17 +61,11 @@ Claude Code picks up the skill on the next session.
 
 ## Authentication
 
-`sun-cli` 0.2.0 ships a browser-based login flow. The default `sun login` opens your browser to `https://sunapp.ai/login`, where you can sign in with email/password, sign up, recover a forgotten or never-set password via a magic link, or sign in with Google. The webapp posts the resulting Supabase session straight to a loopback listener the CLI binds — tokens never appear in any URL, browser history, or server log.
+`sun-cli` ships a browser-based login flow. `sun login` opens your browser to `https://sunapp.ai/login`, where you can sign in with email + password, create a new account, or reset a forgotten password via the **"Forgot your password?"** link. The webapp posts the resulting Supabase session straight to a loopback listener the CLI binds — tokens never appear in any URL, browser history, or server log.
 
 ```bash
-# 0.2.0+ default — opens browser, loopback POST handoff
+# Opens browser, loopback POST handoff
 sun login
-
-# Headless / SSH — interactive prompt in the terminal, no browser
-sun login --no-browser
-
-# CI / agents / fully non-interactive — credentials passed inline, no browser
-sun login --email EMAIL --password PASSWORD
 
 # Check who's logged in (and which token is active)
 sun whoami
@@ -80,23 +74,15 @@ sun whoami
 sun logout
 ```
 
-Pick the form that matches your context:
-
-| Context | Command |
-| --- | --- |
-| Local dev on a machine with a browser | `sun login` |
-| SSH / WSL / headless server | `sun login --no-browser` |
-| CI, scripts, agents | `sun login --email EMAIL --password PASSWORD` |
-| Already-logged-in user before invoking an agent | nothing — the agent reuses the cached session |
+Browser login is the only supported mode. There is no `--email`/`--password` or `--no-browser` fallback. If you need to use `sun` from a CI / SSH / headless environment, run `sun login` once on a machine with a browser and copy the resulting `~/.config/sun/credentials.json` over (or mint a `SUN_TOKEN` and set the env var on the headless side).
 
 Credentials are stored at `~/.config/sun/credentials.json` (mode `0600` on Unix). The cached refresh token survives terminal restarts; you only re-authenticate when the refresh token itself expires or you run `sun logout`.
 
 ### First time? Account states the login flow handles
 
-- **No account yet** → the `/login` page has a Sign-up tab. Email + password, then email-confirm.
-- **Account exists, password set** → standard email/password sign-in, or Google.
-- **Account exists, no password set** (legacy users, or signed up via Google) → click "Email me a sign-in link", click the link, set a password on the resume page, then continue.
-- **Forgot password** → same path as legacy users — request a sign-in link, click it, set a new password.
+- **No account yet** → the `/login` page has a Sign-up tab. Email + password, then click the confirmation link Supabase emails you. **After confirming the email, start a fresh `sun login` session** and sign in with the new account on the Sign-in tab — the first `sun login` window only handles sign-up; it does not auto-complete after email confirmation.
+- **Account exists** → email + password sign-in on the Sign-in tab.
+- **Forgot password** → click **"Forgot your password?"** on `/login`, click the reset link Supabase emails you, set a new password, then re-run `sun login`.
 
 ### Personal API tokens
 
