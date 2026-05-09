@@ -1,4 +1,4 @@
-# sun-claw
+# sun-to-spotify
 
 A [Claude Code](https://claude.com/claude-code) skill — and a public reference for the [`sun`](https://pypi.org/project/sun-cli/) CLI — for generating [Sun](https://sunapp.ai) audio courses programmatically. Built for agents and automation: hand it a topic and a duration, and it produces a finished audio course you can download or publish.
 
