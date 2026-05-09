@@ -1,13 +1,13 @@
 ---
-id: sunclaw
-name: sunclaw
+id: sun-to-spotify
+name: sun-to-spotify
 description: Generate Sun audio courses programmatically. Uses the `sun` CLI (or HTTP API) to authenticate, mint a personal API token, create a course from a prompt, poll until ready, and download the manifest plus per-lecture MP3 files.
 enabled: true
 ---
 
-# Sunclaw — Sun Course Generation Skill
+# sun-to-spotify — Sun Course Generation Skill
 
-`sunclaw` produces audio courses through the Sun public API. Given a prompt and a target duration, it creates a course, waits for generation to finish, and saves the manifest plus per-lecture MP3 files locally.
+`sun-to-spotify` produces audio courses through the Sun public API. Given a prompt and a target duration, it creates a course, waits for generation to finish, and saves the manifest plus per-lecture MP3 files locally.
 
 The skill is built around the `sun` CLI — a self-contained binary that ships independently of the monorepo. For environments where the CLI isn't available, the same flow can run directly against the HTTP API.
 
@@ -95,7 +95,7 @@ sun whoami              # verify there's an active session + token
 ```
 
 - If `sun --help` fails, the CLI isn't installed. Show the user the Install section above and ask them to confirm before running the installer. If install isn't possible, fall back to the HTTP flow in [references/http-api.md](references/http-api.md).
-- If `whoami` reports unauthenticated: do **not** run `sun login` from the agent. Starting in `sun-cli` 0.2.0, plain `sun login` opens a browser for the loopback POST handoff — this won't complete in an agent context. Ask the user to run `sun login` themselves in their terminal and re-invoke the skill. For CI / fully non-interactive contexts, the original credential-passing form `sun login --email "$EMAIL" --password "$PW"` is preserved and works without a browser.
+- If `whoami` reports unauthenticated: do **not** run `sun login` from the agent. `sun login` opens a browser for the loopback POST handoff — this won't complete in an agent context, and there is no `--email`/`--password` fallback. Ask the user to run `sun login` themselves in their terminal and re-invoke the skill. If the user is signing up for the first time, remind them that after clicking the confirmation email link they need to start a **fresh `sun login`** session and sign in with the new account — the original loopback does not auto-complete post-confirmation. For CI / fully non-interactive contexts, the user must first run `sun login` interactively on a machine with a browser, then carry the resulting `~/.config/sun/credentials.json` (or a minted `SUN_TOKEN`) over to the headless environment.
 - If `whoami` reports authenticated but no active token, run `sun tokens create <name>` (`<name>` matches `^[a-z0-9-]+$`, 1-64 chars). The full secret prints to stdout once and is stored as the active token; surface it to the user but never log it elsewhere.
 
 ### 1. Create the course
@@ -198,7 +198,7 @@ ask the user **once**:
 
 > Would you like to save this course to Spotify as a podcast?
 
-If they decline, stop. If they accept, hand off to **only the auth + upload surface** of `save-to-spotify`. Sunclaw has already produced the audio — do **not** invoke save-to-spotify's content-production pipeline.
+If they decline, stop. If they accept, hand off to **only the auth + upload surface** of `save-to-spotify`. sun-to-spotify has already produced the audio — do **not** invoke save-to-spotify's content-production pipeline.
 
 ### Strict scope
 
@@ -208,7 +208,7 @@ Use only:
 - `save-to-spotify upload` (or `episodes create`)
 - `save-to-spotify episodes status` (for readiness polling)
 
-Do **not** invoke save-to-spotify's interview, scripting, TTS, cover-image generation, or timeline production. The MP3s already exist in `<output-dir>/lectures/`; the only job is to authenticate and upload them. If the user wants a rich timeline, image companions, or custom cover generation, defer to the full `save-to-spotify` skill — that's outside sunclaw's scope.
+Do **not** invoke save-to-spotify's interview, scripting, TTS, cover-image generation, or timeline production. The MP3s already exist in `<output-dir>/lectures/`; the only job is to authenticate and upload them. If the user wants a rich timeline, image companions, or custom cover generation, defer to the full `save-to-spotify` skill — that's outside sun-to-spotify's scope.
 
 ### Inputs to collect
 

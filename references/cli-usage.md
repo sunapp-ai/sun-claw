@@ -77,18 +77,18 @@ Token-management endpoints reject API-token auth on purpose: a leaked API token 
 ### `sun login` — Supabase login
 
 ```bash
-sun login                                # 0.2.0+: opens browser, loopback POST handoff
-sun login --no-browser                   # legacy interactive prompt (email + password in terminal)
-sun login --email EMAIL --password PASSWORD   # non-interactive, no browser (CI / agents)
+sun login                                # opens browser, loopback POST handoff
 sun logout                               # forget cached session + saved tokens
 sun whoami                               # prints email, user_id, active token name
 ```
 
-Starting with `sun-cli` 0.2.0, plain `sun login` opens the user's browser to `https://sunapp.ai/login`, where they sign in with email/password, sign up, recover via magic link, or use Google OAuth. The webapp posts the resulting Supabase session to a loopback listener the CLI binds; tokens never appear in any URL. For agent / CI / headless contexts where no browser is available, use `--email --password` (fully non-interactive) or `--no-browser` (terminal prompt fallback).
+`sun login` opens the user's browser to `https://sunapp.ai/login`, where they can sign in with email + password, create a new account, or reset a forgotten password via the **"Forgot your password?"** link. The webapp posts the resulting Supabase session to a loopback listener the CLI binds; tokens never appear in any URL.
+
+For new accounts, the flow is two-step: the first `sun login` only registers the account and triggers the confirmation email. After clicking the link in the email, the user must start a **fresh `sun login`** session and sign in with the new account on the Sign-in tab — the original loopback does not auto-complete after email confirmation.
+
+The browser flow is the only supported way to log in. There is no `--email`/`--password` or `--no-browser` fallback; headless and CI environments need to authenticate on a machine with a browser first, then carry the resulting credentials file or `SUN_TOKEN` over.
 
 The CLI fetches the Supabase URL and anon key automatically from the public `auth-config` endpoint. The refresh token is persisted at `~/.config/sun/credentials.json` with mode `0600` on Unix.
-
-If the `SUN_TOKEN` env var is set, it takes precedence over the credentials file (CI mode). `SUPABASE_URL` and `SUPABASE_ANON_KEY` are honored as test/local-dev overrides.
 
 > Verify the exact env-var names with `sun --help`. The CLI is the source of truth — older docs may use different names.
 
@@ -280,7 +280,7 @@ The lecture audio file hasn't propagated to storage yet, or there's a transient 
 
 ### `login` prints "wrong email or password"
 
-Run `login` again with the correct credentials. If forgotten, reset the password via the webapp before retrying.
+Run `login` again with the correct credentials. If the password is forgotten, run `sun login` (browser flow) and click **"Forgot your password?"** on the /login page to send a reset email; complete the reset on the web, then re-run `sun login`.
 
 ### `login` prints "the server's auth config is invalid"
 
