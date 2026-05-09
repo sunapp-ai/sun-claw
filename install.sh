@@ -2,7 +2,7 @@
 # Install the Sun CLI (sun-cli) from PyPI.
 #
 # Usage:
-#   curl -fsSL https://sunapp-ai.github.io/sun-claw/install.sh | bash
+#   curl -fsSL https://sunapp-ai.github.io/sun-to-spotify/install.sh | bash
 #
 # Installs the `sun-cli` package using whichever Python package manager is
 # available, in this order: uv (preferred), pipx, pip. The installed binary
@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-PACKAGE="sun-cli"
+PACKAGE="sun-cli>=0.2.0"
 BINARY="sun"
 
 err()  { printf 'error: %s\n' "$*" >&2; }

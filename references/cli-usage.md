@@ -11,7 +11,7 @@ The `sun` CLI is self-contained — it ships and works independently of the mono
 ### Curl installer (recommended)
 
 ```bash
-curl -fsSL https://sunapp-ai.github.io/sun-claw/install.sh | bash
+curl -fsSL https://sunapp-ai.github.io/sun-to-spotify/install.sh | bash
 ```
 
 The installer picks the first available Python package manager — `uv` (preferred), then `pipx`, then `pip --user` — and installs `sun-cli` from PyPI. If none of those is on `PATH`, the script prints install instructions and exits 1; install one and re-run.
@@ -21,7 +21,7 @@ The installer picks the first available Python package manager — `uv` (preferr
 If the user already has [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv tool install sun-cli
+uv tool install 'sun-cli>=0.2.0'
 ```
 
 This places `sun` on `PATH` (`~/.local/bin` by default) without requiring a project venv. Update with `uv tool upgrade sun-cli`.
@@ -31,9 +31,9 @@ This places `sun` on `PATH` (`~/.local/bin` by default) without requiring a proj
 Standard Python install:
 
 ```bash
-pip install sun-cli
+pip install 'sun-cli>=0.2.0'
 # or, isolated:
-pipx install sun-cli
+pipx install 'sun-cli>=0.2.0'
 ```
 
 Python 3.10+ required. Only two runtime deps: `httpx` and `typer`.
@@ -77,13 +77,16 @@ Token-management endpoints reject API-token auth on purpose: a leaked API token 
 ### `sun login` — Supabase login
 
 ```bash
-sun login                  # prompts for email + password if not passed
-sun login --email EMAIL --password PASSWORD
-sun logout                 # forget cached session + saved tokens
-sun whoami                 # prints email, user_id, active token name
+sun login                                # 0.2.0+: opens browser, loopback POST handoff
+sun login --no-browser                   # legacy interactive prompt (email + password in terminal)
+sun login --email EMAIL --password PASSWORD   # non-interactive, no browser (CI / agents)
+sun logout                               # forget cached session + saved tokens
+sun whoami                               # prints email, user_id, active token name
 ```
 
-`login` only needs email and password. The CLI fetches the Supabase URL and anon key automatically from the public `auth-config` endpoint. The refresh token is persisted at `~/.config/sun/credentials.json` with mode `0600` on Unix.
+Starting with `sun-cli` 0.2.0, plain `sun login` opens the user's browser to `https://sunapp.ai/login`, where they sign in with email/password, sign up, recover via magic link, or use Google OAuth. The webapp posts the resulting Supabase session to a loopback listener the CLI binds; tokens never appear in any URL. For agent / CI / headless contexts where no browser is available, use `--email --password` (fully non-interactive) or `--no-browser` (terminal prompt fallback).
+
+The CLI fetches the Supabase URL and anon key automatically from the public `auth-config` endpoint. The refresh token is persisted at `~/.config/sun/credentials.json` with mode `0600` on Unix.
 
 If the `SUN_TOKEN` env var is set, it takes precedence over the credentials file (CI mode). `SUPABASE_URL` and `SUPABASE_ANON_KEY` are honored as test/local-dev overrides.
 
