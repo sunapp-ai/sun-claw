@@ -26,16 +26,16 @@ The `sun` CLI is independently installable — no monorepo checkout required. Fo
 
 ```bash
 # 1. curl installer (simplest — picks uv/pipx/pip automatically)
-curl -fsSL https://sunapp-ai.github.io/sun-claw/install.sh | bash
+curl -fsSL https://sunapp-ai.github.io/sun-to-spotify/install.sh | bash
 
 # 2. uv tool (manual, fastest)
-uv tool install sun-cli
+uv tool install 'sun-cli>=0.2.0'
 
 # 3. pipx (isolated)
-pipx install sun-cli
+pipx install 'sun-cli>=0.2.0'
 
 # 4. pip
-pip install sun-cli
+pip install 'sun-cli>=0.2.0'
 ```
 
 Verify:
@@ -44,7 +44,7 @@ Verify:
 sun --help
 ```
 
-> PyPI package name is `sun-cli`; the installed binary is `sun`. The curl installer is hosted on GitHub Pages from the [`sunapp-ai/sun-claw`](https://github.com/sunapp-ai/sun-claw) repo and requires `uv`, `pipx`, or `pip` to already be available; if none is, it prints install instructions and exits.
+> PyPI package name is `sun-cli`; the installed binary is `sun`. The curl installer is hosted on GitHub Pages from the [`sunapp-ai/sun-to-spotify`](https://github.com/sunapp-ai/sun-to-spotify) repo and requires `uv`, `pipx`, or `pip` to already be available; if none is, it prints install instructions and exits.
 
 If `sun --help` fails after install, ask the user how they installed it before troubleshooting. See [references/cli-usage.md](references/cli-usage.md) for monorepo-dev install (`uv sync` + `uv run sun`) and platform-specific notes.
 
@@ -95,7 +95,7 @@ sun whoami              # verify there's an active session + token
 ```
 
 - If `sun --help` fails, the CLI isn't installed. Show the user the Install section above and ask them to confirm before running the installer. If install isn't possible, fall back to the HTTP flow in [references/http-api.md](references/http-api.md).
-- If `whoami` reports unauthenticated, run `sun login` (will prompt for email + password).
+- If `whoami` reports unauthenticated: do **not** run `sun login` from the agent. Starting in `sun-cli` 0.2.0, plain `sun login` opens a browser for the loopback POST handoff — this won't complete in an agent context. Ask the user to run `sun login` themselves in their terminal and re-invoke the skill. For CI / fully non-interactive contexts, the original credential-passing form `sun login --email "$EMAIL" --password "$PW"` is preserved and works without a browser.
 - If `whoami` reports authenticated but no active token, run `sun tokens create <name>` (`<name>` matches `^[a-z0-9-]+$`, 1-64 chars). The full secret prints to stdout once and is stored as the active token; surface it to the user but never log it elsewhere.
 
 ### 1. Create the course

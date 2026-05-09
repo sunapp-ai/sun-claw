@@ -7,7 +7,7 @@ A [Claude Code](https://claude.com/claude-code) skill — and a public reference
 Prompt your agent to install the CLI:
 
 ```text
-> Install the Sun CLI by running https://sunapp-ai.github.io/sun-claw/install.sh
+> Install the Sun CLI by running https://sunapp-ai.github.io/sun-to-spotify/install.sh
 ```
 
 Then drop the `sunclaw` skill into your Claude Code skills directory (see [Install the skill](#install-the-skill)).
@@ -23,7 +23,7 @@ The skill drives the CLI end-to-end — login, course creation, polling, downloa
 ### Curl-bash
 
 ```bash
-curl -fsSL https://sunapp-ai.github.io/sun-claw/install.sh | bash
+curl -fsSL https://sunapp-ai.github.io/sun-to-spotify/install.sh | bash
 ```
 
 The installer picks the first available Python package manager — `uv` (preferred), then `pipx`, then `pip --user` — and installs `sun-cli` from PyPI. If none is on `PATH`, the script prints install instructions and exits 1.
@@ -31,7 +31,7 @@ The installer picks the first available Python package manager — `uv` (preferr
 ### uv tool (manual)
 
 ```bash
-uv tool install sun-cli
+uv tool install 'sun-cli>=0.2.0'
 ```
 
 Places `sun` at `~/.local/bin/sun`. Update with `uv tool upgrade sun-cli`.
@@ -39,8 +39,8 @@ Places `sun` at `~/.local/bin/sun`. Update with `uv tool upgrade sun-cli`.
 ### pipx / pip
 
 ```bash
-pipx install sun-cli      # isolated venv
-pip  install sun-cli      # standard install
+pipx install 'sun-cli>=0.2.0'      # isolated venv
+pip  install 'sun-cli>=0.2.0'      # standard install
 ```
 
 Python 3.10+ required. Two runtime deps: `httpx` and `typer`.
@@ -51,10 +51,10 @@ The `sunclaw` skill teaches Claude Code how to drive the CLI. Drop it into your 
 
 ```bash
 # Project-scoped (only available inside this repo)
-git clone https://github.com/sunapp-ai/sun-claw .claude/skills/sunclaw
+git clone https://github.com/sunapp-ai/sun-to-spotify .claude/skills/sunclaw
 
 # User-scoped (available in every project)
-git clone https://github.com/sunapp-ai/sun-claw ~/.claude/skills/sunclaw
+git clone https://github.com/sunapp-ai/sun-to-spotify ~/.claude/skills/sunclaw
 ```
 
 Claude Code picks up the skill on the next session.
