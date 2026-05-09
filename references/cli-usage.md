@@ -84,7 +84,7 @@ sun logout                               # forget cached session + saved tokens
 sun whoami                               # prints email, user_id, active token name
 ```
 
-Starting with `sun-cli` 0.2.0, plain `sun login` opens the user's browser to `https://sunapp.ai/login`, where they sign in with email/password, sign up, recover via magic link, or use Google OAuth. The webapp posts the resulting Supabase session to a loopback listener the CLI binds; tokens never appear in any URL. For agent / CI / headless contexts where no browser is available, use `--email --password` (fully non-interactive) or `--no-browser` (terminal prompt fallback).
+Starting with `sun-cli` 0.2.0, plain `sun login` opens the user's browser to `https://sunapp.ai/login`, where they can sign in with email + password, create a new account, or reset a forgotten password via the **"Forgot your password?"** link. The webapp posts the resulting Supabase session to a loopback listener the CLI binds; tokens never appear in any URL. New accounts must click the confirmation link emailed by Supabase before the loopback handoff completes — until the email is confirmed, sign-in fails. For agent / CI / headless contexts where no browser is available, use `--email --password` (fully non-interactive) or `--no-browser` (terminal prompt fallback).
 
 The CLI fetches the Supabase URL and anon key automatically from the public `auth-config` endpoint. The refresh token is persisted at `~/.config/sun/credentials.json` with mode `0600` on Unix.
 
@@ -280,7 +280,7 @@ The lecture audio file hasn't propagated to storage yet, or there's a transient 
 
 ### `login` prints "wrong email or password"
 
-Run `login` again with the correct credentials. If forgotten, reset the password via the webapp before retrying.
+Run `login` again with the correct credentials. If the password is forgotten, run `sun login` (browser flow) and click **"Forgot your password?"** on the /login page to send a reset email; complete the reset on the web, then re-run `sun login`.
 
 ### `login` prints "the server's auth config is invalid"
 
