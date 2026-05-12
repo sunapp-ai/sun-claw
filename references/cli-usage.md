@@ -1,8 +1,10 @@
 # Sun CLI Usage
 
-Reference for the `sun` CLI: install, authentication, commands, flags, JSON mode, error handling, and common end-to-end workflows.
+Reference for the `sun` CLI: install, authentication, commands, flags, JSON mode, error handling, and common end-to-end workflows. The CLI generates audio experiences — podcasts, audiobooks, or audio courses — from a prompt.
 
 The CLI is the recommended path. For HTTP-only flows see [http-api.md](http-api.md).
+
+> Note on naming: the CLI subcommand family is `sun courses ...` and the result manifest is `course.json`. These are stable identifiers — do **not** rename them. The framing of the output (podcast / audiobook / audio course) is the user-facing concept; the `courses` subcommand is just the API surface.
 
 ## Installation
 
@@ -94,6 +96,8 @@ The CLI fetches the Supabase URL and anon key automatically from the public `aut
 
 ### `sun tokens` — personal API tokens
 
+The CLI signs generation requests with a personal API token, minted from your Supabase session.
+
 ```bash
 sun tokens create NAME             # prints secret to stdout, saves as active
 sun tokens create NAME --no-save   # prints, does not save (CI: capture into a var)
@@ -105,13 +109,15 @@ Token shape: `sk_live_<22-char-base32>_<32-char-base32>`. The full secret is sho
 
 Revoke is idempotent — revoking the same token twice still returns `204`. Soft-revoked tokens stay visible in `tokens list` (audit trail) but cannot authenticate.
 
-## Generating a course
+## Generating audio (podcast / audiobook / audio course)
 
 ### `sun courses create`
 
+The subcommand name is `courses` — that's the CLI's command. The output it produces is an audio program: a podcast, an audiobook, or an audio course, depending on the prompt.
+
 ```bash
 sun courses create \
-  --prompt "A 30-minute course on the French Revolution" \
+  --prompt "A 30-minute podcast on the French Revolution" \
   --duration-minutes 30
 # Prints the job_id to stdout.
 
@@ -132,7 +138,7 @@ Flags:
 
 | Flag | Purpose |
 | --- | --- |
-| `--prompt TEXT` | Course prompt. 1-4000 chars. Mutually exclusive with `--input`/stdin. |
+| `--prompt TEXT` | Audio prompt — the topic for the podcast / audiobook / audio course. 1-4000 chars. Mutually exclusive with `--input`/stdin. |
 | `--input PATH` | Read prompt from a file. |
 | `--duration-minutes N` | 5-120. Default 30. |
 | `--voice-id UUID` | Optional voice override. |
@@ -154,17 +160,17 @@ sun courses status <JOB_ID> --json
 
 Returns the lightweight status payload. Always `200`, even when the job is in `ERROR` (the error sits inside the body, not the status code).
 
-Recommended manual cadence when not using `--wait`: first poll at 5s, then exponential back-off capped at 30s. Typical 30-min course completes in **60-300s**.
+Recommended manual cadence when not using `--wait`: first poll at 5s, then exponential back-off capped at 30s. A typical 30-min audio program completes in **60-300s**.
 
 ### `sun courses get`
 
 ```bash
 sun courses get <JOB_ID>                    # JSON manifest to stdout
 sun courses get <JOB_ID> --json             # same; explicit
-sun courses get <JOB_ID> --out ./my-course  # download into a directory
+sun courses get <JOB_ID> --out ./my-audio   # download into a directory
 ```
 
-`--out DIR` writes:
+`--out DIR` writes (the manifest filename `course.json` and the `lectures/` subdirectory are CLI-produced stable paths — they're not the user-facing framing):
 
 ```
 DIR/course.json                        # the manifest
@@ -173,7 +179,7 @@ DIR/lectures/002-<slug>.mp3
 ...
 ```
 
-Lectures whose `audio_url` is `null` (still uploading, transient storage error) are skipped with a stderr warning. **Re-run the same command** to fetch fresh signed URLs and pick up missing files. The result endpoint re-signs URLs on every read.
+Segments whose `audio_url` is `null` (still uploading, transient storage error) are skipped with a stderr warning. **Re-run the same command** to fetch fresh signed URLs and pick up missing files. The result endpoint re-signs URLs on every read.
 
 `409 not_ready` appears if the job hasn't reached `SUCCESS` yet — wait and retry.
 
@@ -225,7 +231,7 @@ Both `409 conflict` and `409 not_ready` share the HTTP status — always read `e
 sun login
 sun tokens create laptop
 sun courses create \
-  --prompt "A 30-minute course on the French Revolution" \
+  --prompt "A 30-minute podcast on the French Revolution" \
   --duration-minutes 30 \
   --wait
 # read JOB_ID from the --wait output, or from --json
@@ -276,7 +282,7 @@ Briefly possible during the worker's commit window. Wait 1-2 seconds and retry t
 
 ### `audio_url` is `null` after `SUCCESS`
 
-The lecture audio file hasn't propagated to storage yet, or there's a transient storage error for that lecture. Re-fetch the result endpoint to refresh signed URLs and try again. `courses get --out` already does this — re-run the same command.
+The segment's audio file hasn't propagated to storage yet, or there's a transient storage error for that segment. Re-fetch the result endpoint to refresh signed URLs and try again. `courses get --out` already does this — re-run the same command.
 
 ### `login` prints "wrong email or password"
 
