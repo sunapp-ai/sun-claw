@@ -86,7 +86,7 @@ sun whoami                               # prints email, user_id, active token n
 
 `sun login` opens the user's browser to `https://sunapp.ai/login`, where they can sign in with email + password, create a new account, or reset a forgotten password via the **"Forgot your password?"** link. The webapp posts the resulting Supabase session to a loopback listener the CLI binds; tokens never appear in any URL.
 
-For new accounts, the flow is two-step: the first `sun login` only registers the account and triggers the confirmation email. After clicking the link in the email, the user must start a **fresh `sun login`** session and sign in with the new account on the Sign-in tab — the original loopback does not auto-complete after email confirmation.
+For new accounts, the user signs up with email + password, then clicks the confirmation link Supabase emails them. The link must be opened on the same machine where `sun login` is still running — the original loopback completes the handoff automatically and the CLI logs in. No second `sun login` invocation is needed. The same applies to the password-reset flow: clicking the reset link on the same machine and setting a new password completes the loopback automatically.
 
 The browser flow is the only supported way to log in. There is no `--email`/`--password` or `--no-browser` fallback; headless and CI environments need to authenticate on a machine with a browser first, then carry the resulting credentials file or `SUN_TOKEN` over.
 
@@ -286,7 +286,7 @@ The segment's audio file hasn't propagated to storage yet, or there's a transien
 
 ### `login` prints "wrong email or password"
 
-Run `login` again with the correct credentials. If the password is forgotten, run `sun login` (browser flow) and click **"Forgot your password?"** on the /login page to send a reset email; complete the reset on the web, then re-run `sun login`.
+Run `login` again with the correct credentials. If the password is forgotten, run `sun login` (browser flow) and click **"Forgot your password?"** on the /login page to send a reset email; click the link on the same machine where `sun login` is still running and set a new password — the loopback completes automatically.
 
 ### `login` prints "the server's auth config is invalid"
 

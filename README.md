@@ -82,9 +82,9 @@ Credentials are stored at `~/.config/sun/credentials.json` (mode `0600` on Unix)
 
 ### First time? Account states the login flow handles
 
-- **No account yet** → the `/login` page has a Sign-up tab. Email + password, then click the confirmation link Supabase emails you. **After confirming the email, start a fresh `sun login` session** and sign in with the new account on the Sign-in tab — the first `sun login` window only handles sign-up; it does not auto-complete after email confirmation.
+- **No account yet** → the `/login` page has a Sign-up tab. Email + password, then click the confirmation link Supabase emails you on the same machine where `sun login` is still running. The original loopback completes automatically — no need to re-run `sun login`.
 - **Account exists** → email + password sign-in on the Sign-in tab.
-- **Forgot password** → click **"Forgot your password?"** on `/login`, click the reset link Supabase emails you, set a new password, then re-run `sun login`.
+- **Forgot password** → click **"Forgot your password?"** on `/login`, click the reset link Supabase emails you on the same machine where `sun login` is still running, set a new password, and the loopback completes automatically — no need to re-run `sun login`.
 
 ### Personal API tokens
 
