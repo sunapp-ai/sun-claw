@@ -1,22 +1,24 @@
 ---
 id: sun-to-spotify
 name: sun-to-spotify
-description: Generate Sun audio courses programmatically. Uses the `sun` CLI (or HTTP API) to authenticate, mint a personal API token, create a course from a prompt, poll until ready, and download the manifest plus per-lecture MP3 files.
+description: Generate Sun audio experiences — podcasts, audiobooks, or audio courses — programmatically. Uses the `sun` CLI (or HTTP API) to authenticate, mint a personal API token, create an audio program from a prompt, poll until ready, and download the manifest plus per-segment MP3 files.
 enabled: true
 ---
 
-# sun-to-spotify — Sun Course Generation Skill
+# sun-to-spotify — Sun Audio Generation Skill
 
-`sun-to-spotify` produces audio courses through the Sun public API. Given a prompt and a target duration, it creates a course, waits for generation to finish, and saves the manifest plus per-lecture MP3 files locally.
+`sun-to-spotify` produces audio experiences — podcasts, audiobooks, and audio courses — through the Sun public API. Given a prompt and a target duration, it generates the audio, waits for it to finish, and saves the manifest plus per-segment MP3 files locally.
 
 The skill is built around the `sun` CLI — a self-contained binary that ships independently of the monorepo. For environments where the CLI isn't available, the same flow can run directly against the HTTP API.
+
+> Framing note: when talking to the user, describe the output as a **podcast, audiobook, or audio course** (whichever fits the topic and duration best — short topical takes lean podcast, long narratives lean audiobook, structured multi-segment lessons lean audio course). Avoid framing this as a "course generator" — it's a versatile audio-experience generator.
 
 ## Reference Directory
 
 Load only the file you need — don't inline them.
 
 - [references/cli-usage.md](references/cli-usage.md) — `sun` CLI commands: `login`, `whoami`, `tokens`, `courses`. Install methods, flags, exit codes, JSON mode, env-var overrides, troubleshooting.
-- [references/http-api.md](references/http-api.md) — HTTP-only flow when the CLI isn't installed: `auth-config` discovery, Supabase password grant, token mint, course create / status / result, signed-URL audio download, rate-limit headers, error envelope.
+- [references/http-api.md](references/http-api.md) — HTTP-only flow when the CLI isn't installed: `auth-config` discovery, Supabase password grant, token mint, generation create / status / result, signed-URL audio download, rate-limit headers, error envelope.
 
 ---
 
@@ -54,7 +56,7 @@ If `sun --help` fails after install, ask the user how they installed it before t
 
 ### Inputs come from the user
 
-Don't invent a prompt. If the user said "make a course about X", that's the prompt. If they didn't supply one, ask. Never substitute a creative prompt of your own.
+Don't invent a prompt. If the user said "make a podcast / audiobook / audio course about X", that's the prompt. If they didn't supply one, ask. Never substitute a creative prompt of your own.
 
 ### Save incrementally
 
@@ -74,10 +76,10 @@ The API returns a bare `{"error": {"code": "...", "message": "...", ...}}` envel
 
 Before generating, confirm the user has supplied:
 
-1. **Prompt** — the course topic. 1-4000 chars. Mandatory.
+1. **Prompt** — the topic for the audio (podcast, audiobook, or audio course). 1-4000 chars. Mandatory.
 2. **Duration** — minutes of audio. 5-120, default 30. Optional.
 3. **Voice** — voice UUID. Optional. If not given, the API picks a default.
-4. **Output directory** — where to save the downloaded MP3s. Optional; default to `./course-<short-job-id>/`.
+4. **Output directory** — where to save the downloaded MP3s. Optional; default to `./audio-<short-job-id>/`.
 
 If the prompt is missing, ask once and stop. Don't proceed without it.
 
@@ -98,7 +100,9 @@ sun whoami              # verify there's an active session + token
 - If `whoami` reports unauthenticated: do **not** run `sun login` from the agent. `sun login` opens a browser for the loopback POST handoff — this won't complete in an agent context, and there is no `--email`/`--password` fallback. Ask the user to run `sun login` themselves in their terminal and re-invoke the skill. If the user is signing up for the first time, remind them that after clicking the confirmation email link they need to start a **fresh `sun login`** session and sign in with the new account — the original loopback does not auto-complete post-confirmation. For CI / fully non-interactive contexts, the user must first run `sun login` interactively on a machine with a browser, then carry the resulting `~/.config/sun/credentials.json` (or a minted `SUN_TOKEN`) over to the headless environment.
 - If `whoami` reports authenticated but no active token, run `sun tokens create <name>` (`<name>` matches `^[a-z0-9-]+$`, 1-64 chars). The full secret prints to stdout once and is stored as the active token; surface it to the user but never log it elsewhere.
 
-### 1. Create the course
+### 1. Start the audio generation
+
+The CLI subcommand is `sun courses create` — that's the literal command name; do not rename it. What it produces is an audio program (podcast, audiobook, or audio course depending on the prompt).
 
 ```bash
 sun courses create \
@@ -120,20 +124,20 @@ A `429` response means the user hit their daily limit. Show them `error.message`
 sun courses status <JOB_ID>
 ```
 
-Cadence: first poll at 5s, then exponential back-off capped at 30s. Typical 30-min course completes in **60-300s**. Total timeout 30 min.
+Cadence: first poll at 5s, then exponential back-off capped at 30s. A typical 30-min audio program completes in **60-300s**. Total timeout 30 min.
 
 Treat statuses as:
 - `PENDING` / `PROCESSING` → keep polling
 - `SUCCESS` → proceed to step 3
 - `ERROR` → surface `error.message` and `error.retryable`. If `retryable: true`, ask the user before re-creating.
 
-### 3. Download the course
+### 3. Download the audio
 
 ```bash
 sun courses get <JOB_ID> --out <output-dir>
 ```
 
-Writes:
+Writes (the manifest filename and `lectures/` subdir are produced by the CLI — they're stable disk paths, not the user-facing framing):
 ```
 <output-dir>/course.json
 <output-dir>/lectures/001-<slug>.mp3
@@ -141,11 +145,11 @@ Writes:
 ...
 ```
 
-If any lecture's `audio_url` is `null` (storage propagation lag), the CLI skips it with a stderr warning. Re-run the same command — the result endpoint re-signs URLs and fills in missing files.
+If any segment's `audio_url` is `null` (storage propagation lag), the CLI skips it with a stderr warning. Re-run the same command — the result endpoint re-signs URLs and fills in missing files.
 
 ### 4. Verify
 
-Confirm the manifest exists and the lecture count matches `course.json`'s `lectures[]`:
+Confirm the manifest exists and the segment count matches `course.json`'s `lectures[]` array (`lectures` is the JSON field name; the items are segments / episodes / chapters of the produced audio):
 
 ```bash
 test -f <output-dir>/course.json && \
@@ -159,7 +163,7 @@ If the counts disagree, re-run step 3 once. If they still disagree, surface the 
 
 ## End-to-end example
 
-A complete generation for a user request "Make me a 20-minute course on the history of the printing press":
+A complete generation for a user request "Make me a 20-minute audio program on the history of the printing press" (could equally be phrased "20-minute podcast", "20-minute audiobook chapter", or "20-minute audio course"):
 
 ```bash
 sun --help >/dev/null || { echo "CLI not installed"; exit 1; }
@@ -196,7 +200,7 @@ After step 4, if **either**:
 
 ask the user **once**:
 
-> Would you like to save this course to Spotify as a podcast?
+> Would you like to publish this to Spotify as a podcast?
 
 If they decline, stop. If they accept, hand off to **only the auth + upload surface** of `save-to-spotify`. sun-to-spotify has already produced the audio — do **not** invoke save-to-spotify's content-production pipeline.
 
@@ -230,7 +234,7 @@ SHOW_URI=$(save-to-spotify --json shows create \
   --image  "$COVER" \
   | jq -r .show_uri)
 
-# 2. Upload each lecture as an episode, preserving lecture order
+# 2. Upload each segment as an episode, preserving order
 jq -c '.lectures[]' <output-dir>/course.json | while read -r L; do
   IDX=$(echo "$L" | jq -r .index)
   TITLE=$(echo "$L" | jq -r .title)
@@ -261,4 +265,4 @@ Surface `save-to-spotify` errors verbatim — its JSON envelope already carries 
 
 ## When the CLI isn't available
 
-If `sun` isn't installable (sandboxed env, restricted shell, etc.), the HTTP API supports the same operations. See [references/http-api.md](references/http-api.md) — it covers `auth-config` discovery, the Supabase password grant for token minting, course create / status / result, and the audio-download loop in pure curl or `httpx`.
+If `sun` isn't installable (sandboxed env, restricted shell, etc.), the HTTP API supports the same operations. See [references/http-api.md](references/http-api.md) — it covers `auth-config` discovery, the Supabase password grant for token minting, generation create / status / result, and the audio-download loop in pure curl or `httpx`.
