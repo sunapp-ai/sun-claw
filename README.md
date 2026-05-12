@@ -1,53 +1,46 @@
-# sun-to-spotify
+# Sun to Spotify
 
-A [Claude Code](https://claude.com/claude-code) skill — and a public reference for the [`sun`](https://pypi.org/project/sun-cli/) CLI — for generating [Sun](https://sunapp.ai) audio experiences programmatically. Hand it a topic and a duration and it produces a finished **podcast, audiobook, or audio course** you can download or publish. Built for agents and automation.
+Turn any topic, question, or feed into a **dialogue podcast** — and listen to it in Spotify or your favorite podcast app.
+
+Just say:
+
+> What's the latest in voice and audio AI? Give me a 10-minute roundup.
+
+> What's happening in the stock market this morning? Make it a 5-minute brief.
+
+> Give me my daily brief based on my calendar for the next 30 minutes.
+
+> Summarize *The Hard Thing About Hard Things* as a 20-minute podcast.
+
+> How should I think about marketing my B2B startup? Give me a 15-minute deep dive.
+
+[Sun](https://sunapp.ai) handles everything: research, script writing, multi-speaker dialogue, audio mixing, and publishing. The result lands in your Spotify library, ready to play from any device.
+
+---
 
 ## Quick Start
 
+### 1. Install the CLI
+
 Prompt your agent to install the CLI:
 
-```text
 > Install the Sun CLI by running https://sunapp-ai.github.io/sun-to-spotify/install.sh
-```
 
-Then drop the `sun-to-spotify` skill into your Claude Code skills directory (see [Install the skill](#install-the-skill)).
-
-Once installed, ask for whatever audio format fits:
-
-> Make me a 20-minute podcast on the history of the printing press.
-> Read me a 45-minute audiobook chapter about the Stoics.
-> Build a 60-minute audio course on linear algebra fundamentals.
-
-The skill drives the CLI end-to-end — login, generation, polling, download — and saves the manifest plus per-segment MP3s into a local directory.
-
-## Install
-
-### Curl-bash
+Or install manually:
 
 ```bash
 curl -fsSL https://sunapp-ai.github.io/sun-to-spotify/install.sh | bash
 ```
 
-The installer picks the first available Python package manager — `uv` (preferred), then `pipx`, then `pip --user` — and installs `sun-cli` from PyPI. If none is on `PATH`, the script prints install instructions and exits 1.
-
-### uv tool (manual)
+The installer picks the first available Python package manager — `uv` (preferred), then `pipx`, then `pip --user` — and installs [`sun-cli`](https://pypi.org/project/sun-cli/) from PyPI. Python 3.10+ required.
 
 ```bash
-uv tool install 'sun-cli>=0.2.0'
-```
-
-Places `sun` at `~/.local/bin/sun`. Update with `uv tool upgrade sun-cli`.
-
-### pipx / pip
-
-```bash
+uv tool install 'sun-cli>=0.2.0'   # manual: places sun at ~/.local/bin/sun
 pipx install 'sun-cli>=0.2.0'      # isolated venv
 pip  install 'sun-cli>=0.2.0'      # standard install
 ```
 
-Python 3.10+ required. Two runtime deps: `httpx` and `typer`.
-
-### Install the skill
+### 2. Install the skill
 
 The `sun-to-spotify` skill teaches Claude Code how to drive the CLI. Drop it into your Claude Code skills directory:
 
@@ -61,174 +54,117 @@ git clone https://github.com/sunapp-ai/sun-to-spotify ~/.claude/skills/sun-to-sp
 
 Claude Code picks up the skill on the next session.
 
-## Authentication
-
-`sun-cli` ships a browser-based login flow. `sun login` opens your browser to `https://sunapp.ai/login`, where you can sign in with email + password, create a new account, or reset a forgotten password via the **"Forgot your password?"** link. The webapp posts the resulting Supabase session straight to a loopback listener the CLI binds — tokens never appear in any URL, browser history, or server log.
+### 3. Authenticate
 
 ```bash
-# Opens browser, loopback POST handoff
 sun login
-
-# Check who's logged in (and which token is active)
-sun whoami
-
-# Forget the cached session and saved tokens
-sun logout
 ```
 
-Browser login is the only supported mode. There is no `--email`/`--password` or `--no-browser` fallback. If you need to use `sun` from a CI / SSH / headless environment, run `sun login` once on a machine with a browser and copy the resulting `~/.config/sun/credentials.json` over (or mint a `SUN_TOKEN` and set the env var on the headless side).
-
-Credentials are stored at `~/.config/sun/credentials.json` (mode `0600` on Unix). The cached refresh token survives terminal restarts; you only re-authenticate when the refresh token itself expires or you run `sun logout`.
-
-### First time? Account states the login flow handles
-
-- **No account yet** → the `/login` page has a Sign-up tab. Email + password, then click the confirmation link Supabase emails you on the same machine where `sun login` is still running. The original loopback completes automatically — no need to re-run `sun login`.
-- **Account exists** → email + password sign-in on the Sign-in tab.
-- **Forgot password** → click **"Forgot your password?"** on `/login`, click the reset link Supabase emails you on the same machine where `sun login` is still running, set a new password, and the loopback completes automatically — no need to re-run `sun login`.
-
-### Personal API tokens
-
-The `sun` CLI signs generation requests with a personal API token, minted from your Supabase session.
+Opens your browser to sign in or create a free account. One-time for typical use — the CLI caches credentials; tokens refresh automatically. For CI or headless hosts, set `SUN_TOKEN` or copy credentials from a machine where you ran `sun login` once (see [references/cli-usage.md](references/cli-usage.md)).
 
 ```bash
-# Create a new token (NAME must match ^[a-z0-9-]+$, 1-64 chars)
-sun tokens create laptop
+sun whoami    # check who's logged in
+sun logout    # forget cached session
+```
 
-# List tokens (revoked tokens stay visible for audit; full secret never re-shown)
+### 4. Ask for whatever you want to hear
+
+The skill handles generation, polling, and download automatically — login, job creation, status checks, and saving the manifest plus per-segment MP3s locally.
+
+### 5. Save to Spotify
+
+When generation finishes, the skill can offer to publish your podcast to Spotify. Install the [`save-to-spotify`](https://github.com/spotify/save-to-spotify) skill or CLI. That path is upload-only (Sun already produced the audio); for richer Spotify packaging (cover art, in-player timeline, and so on), use `save-to-spotify` directly.
+
+---
+
+## Personal API tokens
+
+```bash
+sun tokens create <name>    # mint a token (name: ^[a-z0-9-]+$, 1-64 chars)
 sun tokens list
-
-# Revoke a token by name or id
-sun tokens revoke laptop
+sun tokens revoke <name>
 ```
 
-The full secret is printed **once** at creation, then stored as the active token. Token shape: `sk_live_<22-char-base32>_<32-char-base32>`.
+The full secret is printed once at creation. Token shape: `sk_live_<22-char-base32>_<32-char-base32>`.
 
-## Commands
+---
 
-### courses create
+## CLI reference
 
-Submit an audio-generation job. The subcommand is named `courses` because that's the CLI's command, but the output can be a podcast, audiobook, or audio course depending on the prompt.
+| Command | What it does |
+| --- | --- |
+| `sun login` | Sign in via browser |
+| `sun whoami` | Check who's logged in |
+| `sun logout` | Forget cached session |
+| `sun tokens create <name>` | Mint a personal API token |
+| `sun tokens list` | List your tokens |
+| `sun tokens revoke <name>` | Revoke a token |
+| `sun courses create` | Start a podcast generation job |
+| `sun courses status <id>` | Check job status (`PENDING`, `PROCESSING`, `SUCCESS`, `ERROR`) |
+| `sun courses get <id>` | Print manifest or download finished audio |
 
-```bash
-sun courses create \
-  --prompt "A 30-minute podcast on the French Revolution" \
-  --duration-minutes 30
-# Prints the job_id to stdout.
-
-# Read the prompt from a file or stdin
-sun courses create --input ./prompt.txt
-cat ./prompt.txt | sun courses create
-
-# Block until done (polls with exponential back-off, 30 min total timeout)
-sun courses create --prompt "..." --wait
-
-# Pick a specific voice
-sun courses create --prompt "..." --voice-id <uuid>
-```
+### `courses create` flags
 
 | Flag | Description |
-|---|---|
-| `--prompt TEXT` | Audio prompt — the topic for the podcast / audiobook / audio course. 1-4000 chars. Mutually exclusive with `--input`/stdin. |
-| `--input PATH` | Read prompt from a file. |
-| `--duration-minutes N` | 5-120. Default 30. |
-| `--voice-id UUID` | Optional voice override. |
-| `--wait` | Block until SUCCESS / ERROR. |
-| `--json` | Emit machine-readable JSON. |
+| --- | --- |
+| `--prompt TEXT` | What to generate (1-4000 chars) |
+| `--input PATH` | Read prompt from a file |
+| `--duration-minutes N` | Length in minutes (5-120, default 30) |
+| `--voice-id UUID` | Optional voice override |
+| `--wait` | Block until done |
+| `--json` | Machine-readable JSON output |
 
-### courses status
-
-Check whether a job has finished.
+### `courses get`
 
 ```bash
-sun courses status <JOB_ID>
-sun courses status <JOB_ID> --json
+sun courses get <JOB_ID>              # manifest JSON to stdout
+sun courses get <JOB_ID> --out ./dir  # manifest + segment MP3s
 ```
 
-Statuses: `PENDING`, `PROCESSING`, `SUCCESS`, `ERROR`. Always returns `200` — read the body, not the status code. A typical 30-minute audio program completes in **60-300s**.
+Signed segment URLs are re-signed on each fetch — do not cache `audio_url` values long-term.
 
-### courses get
+### JSON mode
 
-Download the manifest and segment MP3s.
+Every command supports `--json` for scripting. Errors emit `{"error": {"code": "...", "message": "..."}}` and a non-zero exit. See [references/cli-usage.md](references/cli-usage.md) for exit codes and troubleshooting.
 
-```bash
-# Print the JSON manifest to stdout
-sun courses get <JOB_ID>
-
-# Download into a directory
-sun courses get <JOB_ID> --out ./my-audio
-```
-
-`--out DIR` writes (the manifest filename and `lectures/` subdir are produced by the CLI — those are stable disk paths, not the user-facing framing):
-
-```
-DIR/course.json
-DIR/lectures/001-<slug>.mp3
-DIR/lectures/002-<slug>.mp3
-...
-```
-
-Signed audio URLs are re-signed on every read of the result endpoint, so re-running `courses get` will fetch fresh URLs and fill in any segments that were skipped due to upload lag. **Don't cache `audio_url` values yourself.**
-
-## JSON mode
-
-Every command supports `--json` for scripting:
-
-```bash
-JOB_ID=$(sun courses create --prompt "..." --json | jq -r .job_id)
-sun --json courses status "$JOB_ID" | jq -r .status
-```
-
-In JSON mode:
-- All structured output goes to stdout.
-- Errors emit the bare envelope `{"error": {"code": "...", "message": "..."}}` and exit non-zero.
-- Status updates and progress hints go to stderr.
-
-## Save to Spotify (optional)
-
-If you also have the [`save-to-spotify`](https://github.com/spotify/save-to-spotify) Claude Code skill or CLI installed, sun-to-spotify will offer to publish the generated audio to Spotify as a podcast after generation finishes.
-
-The integration is **strictly auth + upload**:
-
-- `save-to-spotify auth status` / `auth login`
-- `save-to-spotify shows` / `shows create`
-- `save-to-spotify upload` (one episode per segment, in order)
-- `save-to-spotify episodes status` (poll until `READY`)
-
-sun-to-spotify does **not** invoke save-to-spotify's content-production pipeline — no TTS, no script writing, no cover-image generation, no timeline production. The audio is already produced by `sun`; Spotify just hosts it.
-
-If you want a richer Spotify production (custom cover, image companions, in-player timeline), skip the prompt and use the `save-to-spotify` skill directly.
+---
 
 ## Environment variables
 
 | Variable | Purpose |
-|---|---|
-| `SUN_TOKEN` | Use this API token instead of the credentials file (CI mode). Takes precedence over `~/.config/sun/credentials.json`. |
+| --- | --- |
+| `SUN_TOKEN` | API token for CI / non-interactive use (overrides the credentials file) |
 
-## Error codes
+---
 
-| HTTP | `error.code` | Meaning | Action |
-|---|---|---|---|
-| 401 | `unauthorized` | Missing / unknown / revoked token | `tokens list`, mint a new one, or `login` again |
-| 403 | `forbidden` | Anonymous Supabase user trying to mint a token | `login` with email + password |
-| 404 | `not_found` | Resource doesn't exist or is owned by another user | Verify the job/token id |
-| 409 | `conflict` / `not_ready` | Duplicate token name, or `courses get` before `SUCCESS` | Pick a new name; or wait and retry |
+## Error codes (quick)
 
-| 422 | `validation_error` | Body failed schema validation | Read `error.details` and fix the request |
-| 429 | `rate_limit_exceeded` | Per-user 24h cap reached | Read `Retry-After`; ask user before waiting |
-| 500 | `internal_error` | Server-side failure | Safe to retry with back-off |
+| HTTP | `error.code` | Meaning |
+| --- | --- | --- |
+| 401 | `unauthorized` | Missing / invalid / revoked token |
+| 403 | `forbidden` | Anonymous user trying to mint a token — complete email login |
+| 404 | `not_found` | Wrong id or not your resource |
+| 409 | `conflict` / `not_ready` | Duplicate token name, or `get` before `SUCCESS` |
+| 422 | `validation_error` | Fix request body |
+| 429 | `rate_limit_exceeded` | Respect `Retry-After` |
+| 500 | `internal_error` | Safe to retry with backoff |
 
-Both `409` codes share the HTTP status — always read `error.code`, not just the status.
+Read `error.code`, not only HTTP status (409 covers multiple cases).
 
-## Layout
+---
 
-- [`SKILL.md`](SKILL.md) — skill entry point loaded by Claude Code.
-- [`references/cli-usage.md`](references/cli-usage.md) — full `sun` CLI reference (commands, flags, exit codes, troubleshooting).
-- [`references/http-api.md`](references/http-api.md) — HTTP-only flow when the CLI isn't available.
-- [`install.sh`](install.sh) — the curl installer, hosted via GitHub Pages.
+## Repository layout
+
+- [`SKILL.md`](SKILL.md) — skill entry point for Claude Code
+- [`references/cli-usage.md`](references/cli-usage.md) — full CLI reference
+- [`references/http-api.md`](references/http-api.md) — HTTP API when you are not using the CLI
+- [`install.sh`](install.sh) — curl installer (hosted via GitHub Pages)
+
+---
 
 ## Links
 
-- Sun — https://sunapp.ai
-- `sun-cli` on PyPI — https://pypi.org/project/sun-cli/
-- Claude Code — https://claude.com/claude-code
-- Save to Spotify — https://github.com/spotify/save-to-spotify
+- [Sun](https://sunapp.ai)
+- [sun-cli on PyPI](https://pypi.org/project/sun-cli/)
+- [Claude Code](https://claude.com/claude-code)
+- [Save to Spotify](https://github.com/spotify/save-to-spotify)
