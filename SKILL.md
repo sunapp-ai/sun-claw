@@ -73,6 +73,15 @@ Starting in 0.2.1, episodes finish one-by-one and are visible via `sun audio get
 
 `audio_url` values are signed for 7 days, but the result endpoint re-signs them on every read. Always fetch fresh URLs from `sun audio get` (which calls `/v1/public/courses/{job_id}`) right before downloading; never persist them.
 
+### Treat `SUCCESS` and `show_uri` as eventually consistent
+
+Two surfaces in this pipeline are eventually consistent. Plan for both — neither is a bug:
+
+- **`sun audio status` returns `SUCCESS` before every episode's `audio_url` is signed.** Generation completes per-episode, then signed URLs land on a slight delay. Keep calling `sun audio get --partial` after `SUCCESS` until every `audio_url` in the manifest is non-null (equivalently: every `NNN-*.mp3` file has appeared under `episodes/`). Don't treat post-`SUCCESS` null `audio_url`s as failures, and don't exit the loop on `SUCCESS` alone — exit only when every episode has been downloaded *and* uploaded.
+- **`save-to-spotify shows create` can return `{"show_uri": null}` and succeed seconds later on retry.** Show creation is queued; the URI is confirmed on a short delay. Watch out for `jq -r .show_uri` rendering JSON `null` as the literal string `"null"` — that's not a valid URI. Use `jq -r '.show_uri // empty'` so the result is empty on null, then retry the same `shows create` call on the next poll until a real URI lands. Never upload with `--show-id null`.
+
+The streaming loop in section 2 implements both rules. If you adapt it, preserve those guards.
+
 ### Surface server-reported errors verbatim
 
 The API returns a bare `{"error": {"code": "...", "message": "...", ...}}` envelope on every non-2xx. When something fails, show the user the `error.message` and `error.code` — don't paraphrase or hide them. For `429`, read `Retry-After` instead of computing waits yourself.
@@ -176,6 +185,8 @@ while true; do
   sun audio get "$JOB_ID" --partial --out "$OUT_DIR" >/dev/null 2>&1 || true
 
   # Create the Spotify show on first episode arrival (we now have cover + name).
+  # `shows create` is eventually consistent: it can return show_uri=null and succeed
+  # on the next call. Retry while SHOW_URI is empty — never persist literal "null".
   if [ -z "$SHOW_URI" ] && \
      [ -f "$OUT_DIR/overview.json" ] && \
      ls "$OUT_DIR"/episodes/001-*.mp3 >/dev/null 2>&1; then
@@ -187,8 +198,12 @@ while true; do
       --title   "$SHOW_TITLE" \
       --summary "$SHOW_DESC" \
       --image   "$COVER" \
-      | jq -r .show_uri)
-    echo "[show ] created: $SHOW_TITLE → $SHOW_URI"
+      | jq -r '.show_uri // empty')   # `// empty` collapses JSON null to "" instead of "null"
+    if [ -n "$SHOW_URI" ]; then
+      echo "[show ] created: $SHOW_TITLE → $SHOW_URI"
+    else
+      echo "[show ] not ready yet — will retry next poll"
+    fi
   fi
 
   # If the show is ready, upload each new episode in order.
@@ -216,7 +231,9 @@ while true; do
     print_checklist "$TOTAL" "${UPLOADED[@]}"
   fi
 
-  # Terminate when sun says SUCCESS and we've uploaded every episode.
+  # Terminate when sun says SUCCESS AND every episode has been uploaded.
+  # SUCCESS can fire before every audio_url is signed — keep iterating so the
+  # next `sun audio get --partial` picks up late-signed episodes.
   if [ "$STATUS" = "SUCCESS" ] && [ -n "$SHOW_URI" ] && \
      [ "${#UPLOADED[@]}" -eq "$TOTAL" ]; then
     break
