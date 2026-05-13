@@ -35,9 +35,9 @@ curl -fsSL https://sunapp-ai.github.io/sun-to-spotify/install.sh | bash
 The installer picks the first available Python package manager — `uv` (preferred), then `pipx`, then `pip --user` — and installs [`sun-cli`](https://pypi.org/project/sun-cli/) from PyPI. Python 3.10+ required.
 
 ```bash
-uv tool install 'sun-cli>=0.2.0'   # manual: places sun at ~/.local/bin/sun
-pipx install 'sun-cli>=0.2.0'      # isolated venv
-pip  install 'sun-cli>=0.2.0'      # standard install
+uv tool install 'sun-cli>=0.2.1'   # manual: places sun at ~/.local/bin/sun
+pipx install 'sun-cli>=0.2.1'      # isolated venv
+pip  install 'sun-cli>=0.2.1'      # standard install
 ```
 
 ### 2. Install the skill
@@ -99,11 +99,13 @@ The full secret is printed once at creation. Token shape: `sk_live_<22-char-base
 | `sun tokens create <name>` | Mint a personal API token |
 | `sun tokens list` | List your tokens |
 | `sun tokens revoke <name>` | Revoke a token |
-| `sun courses create` | Start a podcast generation job |
-| `sun courses status <id>` | Check job status (`PENDING`, `PROCESSING`, `SUCCESS`, `ERROR`) |
-| `sun courses get <id>` | Print manifest or download finished audio |
+| `sun audio create` | Start a podcast generation job |
+| `sun audio status <id>` | Check job status (`PENDING`, `PROCESSING`, `SUCCESS`, `ERROR`) |
+| `sun audio get <id>` | Print manifest or download finished audio (stream with `--partial`) |
 
-### `courses create` flags
+> `sun courses ...` still works as a hidden alias for backwards compatibility — it prints a one-line deprecation warning on stderr. Use `sun audio` in new scripts.
+
+### `audio create` flags
 
 | Flag | Description |
 | --- | --- |
@@ -111,14 +113,16 @@ The full secret is printed once at creation. Token shape: `sk_live_<22-char-base
 | `--input PATH` | Read prompt from a file |
 | `--duration-minutes N` | Length in minutes (5-120, default 30) |
 | `--voice-id UUID` | Optional voice override |
+| `--callback-url URL` | Optional HTTPS URL the server POSTs to as each episode finishes |
 | `--wait` | Block until done |
 | `--json` | Machine-readable JSON output |
 
-### `courses get`
+### `audio get`
 
 ```bash
-sun courses get <JOB_ID>              # manifest JSON to stdout
-sun courses get <JOB_ID> --out ./dir  # manifest + segment MP3s
+sun audio get <JOB_ID>                       # manifest JSON to stdout
+sun audio get <JOB_ID> --out ./dir           # overview.json + cover.<ext> + episodes/NNN-<slug>.mp3
+sun audio get <JOB_ID> --partial --out ./dir # works mid-generation; fills in episodes as they finish
 ```
 
 Signed segment URLs are re-signed on each fetch — do not cache `audio_url` values long-term.
@@ -144,7 +148,7 @@ Every command supports `--json` for scripting. Errors emit `{"error": {"code": "
 | 401 | `unauthorized` | Missing / invalid / revoked token |
 | 403 | `forbidden` | Anonymous user trying to mint a token — complete email login |
 | 404 | `not_found` | Wrong id or not your resource |
-| 409 | `conflict` / `not_ready` | Duplicate token name, or `get` before `SUCCESS` |
+| 409 | `conflict` / `not_ready` | Duplicate token name, or `get` before `SUCCESS` (or use `--partial`) |
 | 422 | `validation_error` | Fix request body |
 | 429 | `rate_limit_exceeded` | Respect `Retry-After` |
 | 500 | `internal_error` | Safe to retry with backoff |

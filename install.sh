@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-PACKAGE="sun-cli>=0.2.0"
+PACKAGE="sun-cli>=0.2.1"
 BINARY="sun"
 
 err()  { printf 'error: %s\n' "$*" >&2; }

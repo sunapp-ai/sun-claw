@@ -4,8 +4,6 @@ Direct HTTP reference for environments where the `sun` CLI isn't available. Same
 
 All paths under `/v1/public/`. JSON in, JSON out, UTF-8. Set `BASE` to the deployment URL (production, staging, or `http://127.0.0.1:8000` for local dev).
 
-> Note on naming: the `/v1/public/courses*` path family, the `course_id` response field, and the `lectures[]` array name are stable API identifiers. They predate the broadened framing of the product; do **not** rename them client-side. The user-facing concept (podcast / audiobook / audio course) is independent of the wire format.
-
 ```bash
 BASE="https://<your-sun-api-host>"
 ```
@@ -110,14 +108,16 @@ curl -s "$BASE/v1/public/whoami" -H "Authorization: Bearer $TOKEN"
 
 Use this to confirm a token works before kicking off a generation.
 
-## Start a generation (podcast / audiobook / audio course)
+## Generate audio (podcast / audiobook / audio course)
+
+> The HTTP path is still `/v1/public/courses/*`, the `course_id` response field, and the `lectures[]` array name are stable API identifiers — they predate the broadened framing and won't be renamed. The CLI subcommand was renamed to `sun audio`; the wire format is unchanged. The user-facing concept (podcast / audiobook / audio course) is independent of these wire identifiers.
 
 ```bash
 curl -sX POST "$BASE/v1/public/courses" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-        "prompt": "A 30-minute podcast on the French Revolution",
+        "prompt": "A 30-minute course on the French Revolution",
         "duration_minutes": 30
       }'
 ```
@@ -142,8 +142,26 @@ Response — `202 Accepted`:
 | `prompt` | yes | string | 1-4000 chars. Topic for the audio (podcast, audiobook, or audio course). |
 | `duration_minutes` | no | int | 5-120, default 30 |
 | `voice_id` | no | uuid string | optional voice override |
+| `callback_url` | no | https URL | The server POSTs `{event, job_id, episode_id, episode_number, title, audio_url}` to this URL every time an episode finishes generating. Fire-and-forget (5s timeout, failures logged + swallowed). Treat as a hint; re-fetch the manifest for truth. |
 
 Unknown fields → `422 validation_error` (every model enforces `extra='forbid'`).
+
+### Episode-ready webhook payload
+
+If `callback_url` was set on create, the server POSTs this body to it as each episode finishes:
+
+```json
+{
+  "event": "episode_ready",
+  "job_id": "ce7a...uuid",
+  "episode_id": "...",
+  "episode_number": 1,
+  "title": "Causes",
+  "audio_url": "https://...l1.mp3"
+}
+```
+
+The receiver should respond `2xx`. Non-2xx, timeouts, and network errors are logged server-side but do not retry — the manifest endpoint (`GET /v1/public/courses/{job_id}?include_partial=true`) remains the reliable source of truth for clients that miss a webhook.
 
 ## Poll status
 
@@ -178,7 +196,7 @@ When `status == "ERROR"`:
 
 `progress` is `0-100` when populated; `null` until the worker reports it.
 
-Recommended cadence: first poll at **5s**, then exponential back-off capped at 30s. Total client-side timeout 30 min. A typical 30-min audio program completes in 60-300s.
+Recommended cadence: first poll at **5s**, then exponential back-off capped at 30s. Total client-side timeout 30 min. Typical 30-min course completes in 60-300s.
 
 ```bash
 while true; do
@@ -195,6 +213,10 @@ done
 ```bash
 curl -s "$BASE/v1/public/courses/$JOB_ID" \
   -H "Authorization: Bearer $TOKEN"
+# Add ?include_partial=true to fetch whatever's ready while the job is still
+# PENDING/PROCESSING. Without it, the server returns 409 not_ready until SUCCESS.
+curl -s "$BASE/v1/public/courses/$JOB_ID?include_partial=true" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Response — `200 OK`:
@@ -203,7 +225,7 @@ Response — `200 OK`:
 {
   "job_id": "ce7a...",
   "course_id": "f0a1...",
-  "name": "A 30-minute podcast on the French Revolution",
+  "name": "A 30-minute course on the French Revolution",
   "description": "...",
   "duration_ms": 1800123,
   "image_url": "https://...",
@@ -224,7 +246,7 @@ Response — `200 OK`:
 }
 ```
 
-`409 not_ready` while the job is in `PENDING` or `PROCESSING`:
+`409 not_ready` while the job is in `PENDING` or `PROCESSING` (without `?include_partial=true`):
 
 ```json
 {
@@ -237,11 +259,11 @@ Response — `200 OK`:
 }
 ```
 
+With `?include_partial=true`, the same endpoint returns `200` even mid-generation. Episodes still in progress appear in `lectures[]` with `audio_url: null`; course-level fields (e.g. `image_url`, `description`) may also be null until the worker fills them in. `ERROR` jobs still return `409 not_ready` even with the flag — read `/status` for error details.
+
 Signed `audio_url` values are valid for 7 days, but the result endpoint **re-signs them on every read**. Don't cache them long-term — re-fetch the result if you need fresh URLs.
 
-## Download per-segment audio
-
-The result manifest exposes segments under the `lectures[]` array (stable JSON field name). Each entry is one audio segment — an episode, chapter, or lesson, depending on whether the generation was framed as a podcast, audiobook, or audio course.
+## Download per-lecture audio
 
 ```bash
 curl -s "$BASE/v1/public/courses/$JOB_ID" \
@@ -249,11 +271,11 @@ curl -s "$BASE/v1/public/courses/$JOB_ID" \
   | jq -r '.lectures[] | "\(.number)\t\(.audio_url)"' \
   | while IFS=$'\t' read -r n url; do
       [ -n "$url" ] && [ "$url" != "null" ] || continue
-      curl -sL "$url" -o "segment-$(printf %03d "$n").mp3"
+      curl -sL "$url" -o "lecture-$(printf %03d "$n").mp3"
     done
 ```
 
-Segments with `audio_url == null` (storage propagation lag) are skipped — re-fetch the result endpoint a few seconds later to retry.
+Lectures with `audio_url == null` (storage propagation lag) are skipped — re-fetch the result endpoint a few seconds later to retry.
 
 ## End-to-end (Python `httpx`)
 
@@ -266,7 +288,7 @@ H = {"Authorization": f"Bearer {TOKEN}"}
 
 with httpx.Client(base_url=BASE, headers=H, timeout=30) as c:
     r = c.post("/v1/public/courses", json={
-        "prompt": "A 30-minute podcast on the French Revolution",
+        "prompt": "A 30-minute course on the French Revolution",
         "duration_minutes": 30,
     })
     r.raise_for_status()
@@ -284,11 +306,11 @@ with httpx.Client(base_url=BASE, headers=H, timeout=30) as c:
         raise SystemExit(f"job {job} ended in ERROR")
 
     result = c.get(f"/v1/public/courses/{job}").json()
-    for seg in result["lectures"]:  # JSON field name is `lectures`; items are audio segments
-        if not seg["audio_url"]:
+    for lec in result["lectures"]:
+        if not lec["audio_url"]:
             continue
-        with c.stream("GET", seg["audio_url"]) as resp:
-            with open(f"segment-{seg['number']:03d}.mp3", "wb") as f:
+        with c.stream("GET", lec["audio_url"]) as resp:
+            with open(f"l{lec['number']:03d}.mp3", "wb") as f:
                 for chunk in resp.iter_bytes():
                     f.write(chunk)
 ```
@@ -352,6 +374,7 @@ Both `409 conflict` and `409 not_ready` share the HTTP status — branch on `err
 | `POST` | `/v1/public/tokens` | JWT | 201 token-create response | 401, 403, 409, 422 |
 | `GET` | `/v1/public/tokens` | JWT | 200 token-list response | 401 |
 | `DELETE` | `/v1/public/tokens/{id}` | JWT | 204 | 401, 404 |
-| `POST` | `/v1/public/courses` | API token | 202 generate-audio response | 401, 422, 429, 500 |
+| `POST` | `/v1/public/courses` | API token | 202 course-create response | 401, 422, 429, 500 |
 | `GET` | `/v1/public/courses/{job_id}/status` | API token | 200 status response | 401, 404 |
 | `GET` | `/v1/public/courses/{job_id}` | API token | 200 result response | 401, 404, 409 not_ready |
+| `GET` | `/v1/public/courses/{job_id}?include_partial=true` | API token | 200 result response (may have null fields mid-generation) | 401, 404, 409 not_ready (ERROR jobs only) |

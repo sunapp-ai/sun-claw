@@ -4,8 +4,6 @@ Reference for the `sun` CLI: install, authentication, commands, flags, JSON mode
 
 The CLI is the recommended path. For HTTP-only flows see [http-api.md](http-api.md).
 
-> Note on naming: the CLI subcommand family is `sun courses ...` and the result manifest is `course.json`. These are stable identifiers — do **not** rename them. The framing of the output (podcast / audiobook / audio course) is the user-facing concept; the `courses` subcommand is just the API surface.
-
 ## Installation
 
 The `sun` CLI is self-contained — it ships and works independently of the monorepo. PyPI package name is `sun-cli`; the installed binary is `sun`. Once installed, `sun` is available on `PATH` from any directory.
@@ -23,7 +21,7 @@ The installer picks the first available Python package manager — `uv` (preferr
 If the user already has [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv tool install 'sun-cli>=0.2.0'
+uv tool install 'sun-cli>=0.2.1'
 ```
 
 This places `sun` on `PATH` (`~/.local/bin` by default) without requiring a project venv. Update with `uv tool upgrade sun-cli`.
@@ -33,9 +31,9 @@ This places `sun` on `PATH` (`~/.local/bin` by default) without requiring a proj
 Standard Python install:
 
 ```bash
-pip install 'sun-cli>=0.2.0'
+pip install 'sun-cli>=0.2.1'
 # or, isolated:
-pipx install 'sun-cli>=0.2.0'
+pipx install 'sun-cli>=0.2.1'
 ```
 
 Python 3.10+ required. Only two runtime deps: `httpx` and `typer`.
@@ -44,7 +42,7 @@ Python 3.10+ required. Only two runtime deps: `httpx` and `typer`.
 
 ```bash
 sun --help
-sun version       # if available
+sun --version     # prints "sun-cli <version>"
 ```
 
 macOS and Linux are first-class. Windows works for the HTTP calls but the credentials file relies on user-directory ACL, not `chmod 0600`.
@@ -76,6 +74,8 @@ If `sun --help` fails after a fresh install, the most common causes are:
 
 Token-management endpoints reject API-token auth on purpose: a leaked API token cannot mint replacements.
 
+> The underlying HTTP path is still `/v1/public/courses/*` — only the CLI subcommand was renamed to `audio`.
+
 ### `sun login` — Supabase login
 
 ```bash
@@ -96,8 +96,6 @@ The CLI fetches the Supabase URL and anon key automatically from the public `aut
 
 ### `sun tokens` — personal API tokens
 
-The CLI signs generation requests with a personal API token, minted from your Supabase session.
-
 ```bash
 sun tokens create NAME             # prints secret to stdout, saves as active
 sun tokens create NAME --no-save   # prints, does not save (CI: capture into a var)
@@ -111,27 +109,30 @@ Revoke is idempotent — revoking the same token twice still returns `204`. Soft
 
 ## Generating audio (podcast / audiobook / audio course)
 
-### `sun courses create`
+> `sun courses ...` still works as a hidden alias for backwards compatibility — it prints a one-line deprecation warning on stderr and runs the same command. Use `sun audio` in all new scripts.
 
-The subcommand name is `courses` — that's the CLI's command. The output it produces is an audio program: a podcast, an audiobook, or an audio course, depending on the prompt.
+### `sun audio create`
 
 ```bash
-sun courses create \
-  --prompt "A 30-minute podcast on the French Revolution" \
+sun audio create \
+  --prompt "A 30-minute course on the French Revolution" \
   --duration-minutes 30
 # Prints the job_id to stdout.
 
 # Or read the prompt from a file / stdin:
-sun courses create --input ./prompt.txt
-cat ./prompt.txt | sun courses create
+sun audio create --input ./prompt.txt
+cat ./prompt.txt | sun audio create
 
 # Block until done and print the result:
-sun courses create --prompt "..." --wait
+sun audio create --prompt "..." --wait
 # stderr: status updates (PENDING → PROCESSING → SUCCESS)
 # stdout: human summary, or full JSON with --json
 
 # Pick a specific voice:
-sun courses create --prompt "..." --voice-id <uuid>
+sun audio create --prompt "..." --voice-id <uuid>
+
+# Register a webhook fired as each episode finishes:
+sun audio create --prompt "..." --callback-url https://your.handler/hook
 ```
 
 Flags:
@@ -142,6 +143,7 @@ Flags:
 | `--input PATH` | Read prompt from a file. |
 | `--duration-minutes N` | 5-120. Default 30. |
 | `--voice-id UUID` | Optional voice override. |
+| `--callback-url URL` | Optional HTTPS URL the server will POST to as each episode finishes. Body: `{event, job_id, episode_id, episode_number, title, audio_url}`. Fire-and-forget — treat as a hint and re-fetch the manifest for truth. |
 | `--wait` | Block until SUCCESS / ERROR. Polls with exponential back-off (2s → 30s cap, total 30 min). |
 | `--json` | Emit machine-readable JSON to stdout. |
 
@@ -151,48 +153,59 @@ Exactly one prompt source must be provided (`--prompt`, `--input`, or stdin when
 - `0` on `SUCCESS`
 - non-zero on `ERROR` or 30-min timeout
 
-### `sun courses status`
+### `sun audio status`
 
 ```bash
-sun courses status <JOB_ID>
-sun courses status <JOB_ID> --json
+sun audio status <JOB_ID>
+sun audio status <JOB_ID> --json
 ```
 
 Returns the lightweight status payload. Always `200`, even when the job is in `ERROR` (the error sits inside the body, not the status code).
 
-Recommended manual cadence when not using `--wait`: first poll at 5s, then exponential back-off capped at 30s. A typical 30-min audio program completes in **60-300s**.
+Recommended manual cadence when not using `--wait`: first poll at 5s, then exponential back-off capped at 30s. Typical 30-min generation completes in **60-300s**.
 
-### `sun courses get`
+### `sun audio get`
 
 ```bash
-sun courses get <JOB_ID>                    # JSON manifest to stdout
-sun courses get <JOB_ID> --json             # same; explicit
-sun courses get <JOB_ID> --out ./my-audio   # download into a directory
+sun audio get <JOB_ID>                    # JSON manifest to stdout
+sun audio get <JOB_ID> --json             # same; explicit
+sun audio get <JOB_ID> --out ./my-audio   # download manifest + audio + images
+sun audio get <JOB_ID> --partial --out ./my-audio   # works mid-generation
 ```
 
-`--out DIR` writes (the manifest filename `course.json` and the `lectures/` subdirectory are CLI-produced stable paths — they're not the user-facing framing):
+`--out DIR` writes:
 
 ```
-DIR/course.json                        # the manifest
-DIR/lectures/001-<slug>.mp3
-DIR/lectures/002-<slug>.mp3
+DIR/overview.json                                  # the manifest
+DIR/cover.<ext>                                    # top-level cover image
+DIR/episodes/001-<slug>.mp3                        # first episode audio
+DIR/episodes/001-<slug>.<ext>                      # first episode artwork (optional)
+DIR/episodes/002-<slug>.mp3
+DIR/episodes/002-<slug>.<ext>
 ...
 ```
 
-Segments whose `audio_url` is `null` (still uploading, transient storage error) are skipped with a stderr warning. **Re-run the same command** to fetch fresh signed URLs and pick up missing files. The result endpoint re-signs URLs on every read.
+Filename format: `NNN-<slug>.mp3` where `NNN` is the zero-padded episode number (`001`, `002`, …). The slug is the episode title slugified by the CLI. Slugs are lowercase ASCII with hyphens, max 60 chars, falling back to `"untitled"`. Example: `001-from-manya-to-governess-early-years-and-formative-struggles.mp3` — the `001` prefix marks it as the first episode; sequential ordering is preserved.
 
-`409 not_ready` appears if the job hasn't reached `SUCCESS` yet — wait and retry.
+Episodes whose `audio_url` is `null` (still uploading, or you used `--partial` and they haven't finished generating) are skipped with a stderr warning. **Re-run the same command** to fetch fresh signed URLs and pick up missing files. The result endpoint re-signs URLs on every read.
+
+`--partial` lets you fetch while the job is still PENDING/PROCESSING. Without it, `audio get` returns `409 not_ready` until the job reaches `SUCCESS`. With it:
+- ERROR jobs still 409 — read `sun audio status` for error details.
+- Course-level fields (cover URL, description) may be null mid-generation.
+- Per-episode `audio_url` and `image_url` are null until each one finishes; the CLI silently skips them.
+
+Re-run `sun audio get --partial --out DIR` on a loop to pick up new episodes as they arrive.
 
 ## JSON mode
 
 For agents, always pass `--json`:
 
 ```bash
-sun --json courses status <JOB_ID>
-sun courses create --prompt "..." --json
+sun --json audio status <JOB_ID>
+sun audio create --prompt "..." --json
 ```
 
-Note: some commands accept `--json` as a global flag (before the subcommand), others as a subcommand flag. Both work in current builds — when in doubt, run `sun --help` or `sun courses create --help`.
+Note: some commands accept `--json` as a global flag (before the subcommand), others as a subcommand flag. Both work in current builds — when in doubt, run `sun --help` or `sun audio create --help`.
 
 In JSON mode:
 - All structured output is JSON on stdout.
@@ -204,8 +217,9 @@ In JSON mode:
 | Variable | Purpose |
 | --- | --- |
 | `SUN_TOKEN` | Use this API token instead of the credentials file (CI mode). Takes precedence over `~/.config/sun/credentials.json`. |
+| `SUN_API_BASE_URL` | Override the default API base URL (e.g. for staging or local dev). |
 
-Confirm the exact names against `sun --help` if the CLI has been rebuilt — env-var names are the most likely thing to drift in the rename.
+Confirm the exact names against `sun --help` if the CLI has been rebuilt — env-var names are the most likely thing to drift.
 
 ## Error codes
 
@@ -215,7 +229,7 @@ Confirm the exact names against `sun --help` if the CLI has been rebuilt — env
 | 403 | `forbidden` | Anonymous Supabase user trying to mint a token | `login` with email + password |
 | 404 | `not_found` | Resource doesn't exist OR is owned by another user | Verify the job/token id |
 | 409 | `conflict` | Duplicate token name on `tokens create` | Pick a different name |
-| 409 | `not_ready` | `courses get` while job not yet `SUCCESS` | Poll status; retry |
+| 409 | `not_ready` | `audio get` while job not yet `SUCCESS` (and `--partial` not used, or job is in ERROR) | Poll status; retry, or pass `--partial` |
 | 422 | `validation_error` | Body failed schema validation | Read `error.details`; fix the request |
 | 429 | `rate_limit_exceeded` | Per-user 24h cap reached | Read `Retry-After`; ask user before waiting |
 | 500 | `internal_error` | Server-side failure | Safe to retry with back-off |
@@ -230,12 +244,32 @@ Both `409 conflict` and `409 not_ready` share the HTTP status — always read `e
 ```bash
 sun login
 sun tokens create laptop
-sun courses create \
-  --prompt "A 30-minute podcast on the French Revolution" \
+sun audio create \
+  --prompt "A 30-minute course on the French Revolution" \
   --duration-minutes 30 \
   --wait
 # read JOB_ID from the --wait output, or from --json
-sun courses get <JOB_ID> --out ./french-revolution
+sun audio get <JOB_ID> --out ./french-revolution
+```
+
+### Stream episodes as they finish (recommended for sun-to-spotify)
+
+```bash
+JOB_ID=$(sun audio create --prompt "..." --duration-minutes 30 --json | jq -r .job_id)
+OUT="./audio-${JOB_ID:0:8}"
+
+while true; do
+  STATUS=$(sun audio status "$JOB_ID" --json | jq -r .status)
+  sun audio get "$JOB_ID" --partial --out "$OUT" >/dev/null 2>&1 || true
+
+  # ...do something with newly-arrived episodes in $OUT/episodes/...
+
+  case "$STATUS" in
+    SUCCESS) break ;;
+    ERROR)   sun audio status "$JOB_ID" --json | jq -r .error; exit 1 ;;
+  esac
+  sleep 10
+done
 ```
 
 ### Generate-and-download (existing token, headless)
@@ -243,18 +277,18 @@ sun courses get <JOB_ID> --out ./french-revolution
 ```bash
 export SUN_TOKEN="sk_live_..._..."
 
-JOB=$(sun courses create --prompt "..." --json | jq -r .job_id)
+JOB=$(sun audio create --prompt "..." --json | jq -r .job_id)
 
 while true; do
-  S=$(sun courses status "$JOB" --json | jq -r .status)
+  S=$(sun audio status "$JOB" --json | jq -r .status)
   case "$S" in
     SUCCESS) break ;;
-    ERROR)   sun courses status "$JOB" --json | jq -r .error; exit 1 ;;
+    ERROR)   sun audio status "$JOB" --json | jq -r .error; exit 1 ;;
     *)       sleep 10 ;;
   esac
 done
 
-sun courses get "$JOB" --out ./out
+sun audio get "$JOB" --out ./out
 ```
 
 
@@ -278,11 +312,11 @@ Worker saturation. Public-API requests share concurrency with the rest of the pl
 
 ### `409 not_ready` even though status shows `SUCCESS`
 
-Briefly possible during the worker's commit window. Wait 1-2 seconds and retry the result endpoint.
+Briefly possible during the worker's commit window. Wait 1-2 seconds and retry the result endpoint. Alternatively, pass `--partial` to `sun audio get` — it returns 200 mid-generation and won't 409 on the commit-window race.
 
 ### `audio_url` is `null` after `SUCCESS`
 
-The segment's audio file hasn't propagated to storage yet, or there's a transient storage error for that segment. Re-fetch the result endpoint to refresh signed URLs and try again. `courses get --out` already does this — re-run the same command.
+The episode audio file hasn't propagated to storage yet, or there's a transient storage error for that episode. Re-fetch the result endpoint to refresh signed URLs and try again. `sun audio get --out` already does this — re-run the same command.
 
 ### `login` prints "wrong email or password"
 
@@ -298,4 +332,4 @@ Check `SUN_API_BASE_URL`. For local dev set it to `http://127.0.0.1:8000`. For s
 
 ### `--json` gives unexpected shape
 
-Some subcommands accept `--json` globally (`sun --json courses status ...`), others as a flag on the subcommand (`sun courses status --json ...`). Both forms exist in current builds; if one doesn't parse, try the other. `sun courses create --help` shows the supported placement.
+Some subcommands accept `--json` globally (`sun --json audio status ...`), others as a flag on the subcommand (`sun audio status --json ...`). Both forms exist in current builds; if one doesn't parse, try the other. `sun audio create --help` shows the supported placement.
