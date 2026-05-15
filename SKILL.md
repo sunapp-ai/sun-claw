@@ -30,7 +30,9 @@ The `sun` CLI is independently installable — no monorepo checkout required. Fo
 
 ```bash
 # 1. curl installer (simplest — picks uv/pipx/pip automatically)
-curl -fsSL https://sunapp-ai.github.io/sun-to-spotify/install.sh | bash
+# Download first, then inspect, then run — avoids piping remote scripts directly to a shell.
+curl -fsSL https://sunapp-ai.github.io/sun-to-spotify/install.sh -o install.sh
+bash install.sh
 
 # 2. uv tool (manual, fastest)
 uv tool install 'sun-cli>=0.2.1'
