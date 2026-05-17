@@ -2,7 +2,7 @@
 
 Turn any topic, question, or feed into a **dialogue podcast** — and listen to it in Spotify or your favorite podcast app.
 
-![Sun to Spotify demo — ask a question, get a podcast in Spotify](assets/sun-to-spotify-demo.mp4)
+https://github.com/sunapp-ai/sun-to-spotify/raw/main/assets/sun-to-spotify-demo.mp4
 
 Just say:
 
