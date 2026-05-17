@@ -2,6 +2,8 @@
 
 Turn any topic, question, or feed into a **dialogue podcast** — and listen to it in Spotify or your favorite podcast app.
 
+![Sun to Spotify demo — ask a question, get a podcast in Spotify](assets/sun-to-spotify-demo.mp4)
+
 Just say:
 
 > What's the latest in voice and audio AI? Give me a 10-minute roundup.
@@ -155,6 +157,7 @@ Read `error.code`, not only HTTP status (409 covers multiple cases).
 
 ## Repository layout
 
+- [`assets/sun-to-spotify-demo.mp4`](assets/sun-to-spotify-demo.mp4) — README demo video
 - [`SKILL.md`](SKILL.md) — skill entry point for Claude Code
 - [`references/cli-usage.md`](references/cli-usage.md) — full CLI reference
 - [`references/http-api.md`](references/http-api.md) — HTTP API when you are not using the CLI
